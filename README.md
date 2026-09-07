@@ -55,10 +55,10 @@ Melobi cung cấp các chức năng chính như đăng bài, tương tác với 
 | STT | Họ và tên | MSSV | Vai trò | Tên tài khoản GitHub |
 |---|---|---|---|---|
 | 1 | Nguyễn Phương Bảo Minh | 31241026847 | Nhóm trưởng | BaoMinh1111 |
-| 2 | Nguyễn Thị Hương Giang | 221xxxxx | Thành viên |  |
-| 3 | Bùi Phạm Xuân Nghi | 221xxxxx | Thành viên | Kết bạn, trang cá nhân |
-| 4 | Lâm Nguyễn Tấn Phát | 221xxxxx | Thành viên | Nhắn tin |
-| 5 | Phạm Hoàng Lâm  | 221xxxxx | Thành viên | Nhắn tin |
+| 2 | Nguyễn Thị Hương Giang | 31241028177 | Thành viên | giangmeo227 |
+| 3 | Bùi Phạm Xuân Nghi | 31241024532 | Thành viên | clarice-xn |
+| 4 | Lâm Nguyễn Tấn Phát | 31241025248 | Thành viên | zane1910 |
+| 5 | Phạm Hoàng Lâm  | 31231022831 | Thành viên | UEH-Woo |
 
 ## Thông tin đồ án
 
