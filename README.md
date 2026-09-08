@@ -39,7 +39,7 @@ Melobi cung cấp các chức năng chính như đăng bài, tương tác với 
 
 ### Kết bạn
 
-- Tìm kiếm người dùng
+- Tìm kiếm người dùng khác
 - Gửi lời mời kết bạn
 - Chấp nhận hoặc từ chối lời mời kết bạn
 - Xem danh sách bạn bè
