@@ -45,7 +45,7 @@ Melobi cung cấp các chức năng chính như đăng bài, tương tác với 
 - Chấp nhận hoặc từ chối lời mời kết bạn
 - Xem danh sách bạn bè
 
-### Nhắn tin
+### Nhắn tin.
 
 - Xem danh sách cuộc trò chuyện
 - Nhắn tin với bạn bè
