@@ -1,7 +1,7 @@
 # Melobi.
 
 
-> Ứng dụng mạng xã hội trên thiết bị di động
+> Ứng dụng mạng xã hội trên thiết bị di động 
 
 ## Giới thiệu
 
@@ -59,7 +59,7 @@ Melobi cung cấp các chức năng chính như đăng bài, tương tác với 
 | 2 | Nguyễn Thị Hương Giang | 31241028177 | Thành viên | giangmeo227 |
 | 3 | Bùi Phạm Xuân Nghi | 31241024532 | Thành viên | clarice-xn |
 | 4 | Lâm Nguyễn Tấn Phát | 31241025248 | Thành viên | zane1910 |
-| 5 | Phạm Hoàng Lâm  | 31231022831 | Thành viên | UEH-Woo |
+| 5 | Phạm Hoàng Lâm Vũ | 31231022831 | Thành viên | UEH-Woo |
 
 ## Thông tin đồ án
 
