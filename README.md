@@ -128,7 +128,7 @@ Theo dõi hoặc hủy theo dõi người dùng.
 
 | STT | Họ và tên | MSSV | Vai trò | Tên tài khoản GitHub |
 |---|---|---|---|---|
-| 1 | Nguyễn Phương Bảo Minh | 31241026847 | Nhóm trưởng | BaoMinh1111 |
+| 1 | Nguyễn Phương Bảo Minh | 31241026847 | Nhóm trưởng | BaoMinh1111, minhnguyen11112006|
 | 2 | Nguyễn Thị Hương Giang | 31241028177 | Thành viên | giangmeo227 |
 | 3 | Bùi Phạm Xuân Nghi | 31241024532 | Thành viên | clarice-xn |
 | 4 | Lâm Nguyễn Tấn Phát | 31241025248 | Thành viên | zane1910 |
