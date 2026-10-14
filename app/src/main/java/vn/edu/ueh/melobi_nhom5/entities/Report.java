@@ -44,3 +44,10 @@ public class Report {
     public void setStatus() {this.status = status; }
 
 }
+/*1 số lỗi sau:
+* các setter không có tham số: 'public void setReporterId() {this.reporterId = reporterId; }' Firestore cần setXxx(giá trị) để đọc dữ liệu về, nên khi toObject(Report.class), 
+các trường reporterId, targetId, targetType, reason, status sẽ null.
+-> Cách sửa: setReporterId(String reporterId)
+* thiếu getter/setter của createdAt
+* status là chuỗi tiếng Việt "Đang xử lý...". ModerationService sẽ lọc theo getReports(status), nên giá trị phải là hằng số cố định, 
+không dấu, như PENDING, RESOLVED, REJECTED. Chữ hiển thị cho Admin thì chuyển đổi ở giao diện.*/
