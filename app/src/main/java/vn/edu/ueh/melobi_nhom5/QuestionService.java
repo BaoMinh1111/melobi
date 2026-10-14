@@ -129,3 +129,13 @@ public class QuestionService {
                 .update("status", Question.STATUS_HIDDEN);
     }
 }
+/*1 số lỗi nhỏ như sau:
+* updateQuestion xóa mất ảnh cũ. Nếu người dùng chỉ sửa chữ và truyền imageUrl = null, dòng data.put("imageUrl", imageUrl) sẽ ghi đè ảnh cũ thành null
+-> Cách sửa: if (imageUrl != null) data.put("imageUrl", imageUrl);
+* mâu thuẫn với uploadQuestionImage(questionId, file). Thiết kế cần questionId để đặt tên ảnh, nhưng add() chỉ có ID sau khi tạo xong.
+-> Cách sửa: tạo ID trước, upload ảnh, rồi mới ghi câu hỏi.
+* deleteQuestion để lại dữ liệu mồ côi. Firestore không tự xóa Answer, Comment, Like liên quan (khác với Composition trong sơ đồ lớp)
+-> Cách sửa: 
+- Xóa mềm: đổi status thành DELETED rồi lọc ra khi hiển thị. Đơn giản, không mất dữ liệu
+- Xóa thật kèm xóa Answer, Comment bằng batch, phải phối hợp với C.
+* thiếu searchQuestions(keyword)*/
