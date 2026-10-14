@@ -130,3 +130,12 @@ public class Answer implements Serializable {
         return currentUserId != null && getLikedUserIds().contains(currentUserId);
     }
 }
+/*có 1 số lỗi sau:
+* Thiếu status: Trong docs có status và hàm hideAnswer(), getAnswersByQuestion() còn phải “bỏ câu bị ẩn”. 
+Code chưa có field nào để ẩn, nên chức năng kiểm duyệt của admin không chạy được.
+* Like có tới 3 nguồn dữ liệu: Tài liệu có entity Like, code lại có likes và likedUserIds. 
+Ba nơi cùng lưu một thông tin nên rất dễ lệch nhau.
+* Các tên field lệch trong docs: đặt tên lại
+* userName, userAvatarUrl chưa khai báo
+* List<String> không lưu thẳng được vào SQLite: ContentLocalDao.saveAnswers() phải chuyển likedUserIds sang chuỗi (JSON hoặc ngăn cách bằng dấu phẩy), 
+nếu không offline sẽ mất trạng thái “đã thích”*/
