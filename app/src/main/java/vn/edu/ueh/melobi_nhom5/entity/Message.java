@@ -82,3 +82,9 @@ public class Message {
         this.isRead = isRead;
     }
 }
+/*còn 1 lối sau:
+* public boolean getIsRead() { ... }
+public void setIsRead(boolean isRead) { ... }
+- Firestore suy ra tên field từ getter/setter, nên getIsRead sẽ lưu thành field isRead khi ghi, 
+nhưng các quy tắc nhận diện của Firestore với kiểu boolean hay gây lệch (ví dụ có thể xuất hiện thêm field read). 
+Cách chắc chắn đúng là làm giống lớp Notification của Nghi: dùng @PropertyName("isRead") ở cả getter lẫn setter.*/
