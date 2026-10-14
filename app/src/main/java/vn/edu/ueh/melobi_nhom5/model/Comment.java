@@ -90,3 +90,6 @@ public class Comment implements Serializable {
         this.updatedAt = updatedAt;
     }
 }
+/*có 1 số lỗi sau:
+* updatedAt thừa so với chức năng: CommentService chỉ có thêm, xóa, xem, không có sửa
+* userName, userAvatarUrl chưa khai báo*/
