@@ -86,3 +86,10 @@ public class FollowService {
         }
     }
 }
+/*1 số vấn đề sau:
+* Dữ liệu chỉ nằm trong RAM: private final List<Follow> follows = new ArrayList<>()
+- Thoát app hay xoay màn hình có thể mất toàn bộ dữ liệu follow.
+- Mỗi lần new FollowService() sẽ có một danh sách riêng, nên hai màn hình khác nhau thấy hai trạng thái khác nhau.
+- Chưa có kết nối Firebase như thiết kế
+* Vấn đề khi chuyển sang Firebase: Khi nối Firebase, các hàm sẽ bất đồng bộ, nên kiểu trả về boolean sẽ không dùng được nữa
+-> Cách sửa: cần callback, Task<> hoặc LiveData*/
