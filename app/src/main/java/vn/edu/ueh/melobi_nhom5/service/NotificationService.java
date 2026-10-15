@@ -66,3 +66,10 @@ public class NotificationService {
                 .continueWith(task -> (int) task.getResult().getCount());
     }
 }
+/* 1 số vấn đề nhỏ sau:
+* receiverId.equals(actorId) sẽ NPE nếu receiverId null (ví dụ caller truyền thiếu ownerId). Vì nó chạy trong listener nên app crash
+-> Cách sửa: if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
+* getNotifications không giới hạn số lượng
+-> Cách sửa: Thêm .limit(50)
+* markAllAsRead dùng task.getResult() mà không kiểm tra task thành công
+-> Cách sửa: Thêm if (!task.isSuccessful()) throw task.getException();*/
