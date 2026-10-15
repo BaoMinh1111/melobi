@@ -106,3 +106,20 @@ public class ContentLocalDao {
         return questionList;
     }
 }
+/*1 số lỗi sau:
+* Thiếu so với thiết kế: lớp này gồm saveQuestions, getQuestions, getQuestionById, saveAnswers, getAnswersByQuestion, clearOldCache. Code hiện chỉ có 2 hàm đầu
+* Chưa hỗ trợ đồng bộ hai chiều: SyncManager.pushPendingChanges() cần biết bản ghi nào được tạo hoặc sửa lúc offline. DAO chưa có cột hay hàm nào cho việc này
+-> Cách sửa: thêm:
+- Cột syncStatus (SYNCED / PENDING_CREATE / PENDING_UPDATE / PENDING_DELETE) vào bảng.
+- Các hàm getPendingQuestions(), markAsSynced(id), saveQuestion(Question q, String syncStatus).
+* Chưa có phân trang và lọc: QuestionService.getQuestions(page), filterByMajor() và searchQuestions() đều cần có phiên bản offline. Hiện getQuestions() 
+trả toàn bộ bảng không giới hạn
+-> Cách sửa: thêm:
+- getQuestions(int limit, int offset).
+- getQuestionsByMajor(majorId).
+- searchQuestions(keyword) dùng WHERE title LIKE ? OR content LIKE ?
+* Chưa lọc nội dung bị ẩn
+-> Cách sửa: Câu truy vấn nên có WHERE status != 'HIDDEN'
+* Dữ liệu hiển thị offline còn thiếu: Question chỉ lưu userId. Khi offline, danh sách câu hỏi sẽ không có tên và avatar người đăng
+* Rủi ro với CONFLICT_REPLACE: REPLACE thực chất là xóa rồi chèn lại. Nếu bảng Answer có FOREIGN KEY ... ON DELETE CASCADE tới Question, 
+việc ghi đè một câu hỏi sẽ xóa luôn các câu trả lời đã cache*/
