@@ -38,6 +38,25 @@ public class User {
         this.createdAt = System.currentTimeMillis();
     }
 
+    public User(String userId, String fullName, String email, String avatarUrl, String majorId) {
+        this.userId = userId;
+        this.fullName = fullName;
+        this.email = email;
+        this.avatarUrl = avatarUrl;
+        this.majorId = majorId;
+        this.role = ROLE_USER;
+        this.status = STATUS_ACTIVE;
+        this.followerCount = 0;
+        this.followingCount = 0;
+        this.createdAt = System.currentTimeMillis();
+    }
+
+    public String getId() { return userId; }
+    public void setId(String userId) { this.userId = userId; }
+
+    public String getDisplayName() { return fullName; }
+    public void setDisplayName(String displayName) { this.fullName = displayName; }
+
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
 
