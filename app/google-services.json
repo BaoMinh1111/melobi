@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "433632654385",
+    "project_id": "melobi-16eb4",
+    "storage_bucket": "melobi-16eb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:433632654385:android:c9414ce746bf222ed7d110",
+        "android_client_info": {
+          "package_name": "vn.edu.ueh.melobi_nhom5"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC4D9YzTt38y1t2tWH-We-GBl_wGckITEA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,12 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.MelobiNhóm5" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/melobi_primary</item>
+        <item name="colorPrimaryVariant">@color/melobi_primary_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:colorBackground">@color/melobi_background</item>
+        <item name="colorSurface">@color/melobi_surface</item>
+        <item name="android:statusBarColor">@color/melobi_primary_dark</item>
     </style>
 
     <style name="Theme.MelobiNhóm5" parent="Base.Theme.MelobiNhóm5" />
