@@ -1,4 +1,4 @@
-package vn.edu.ueh.melobi_nhom5;
+package vn.edu.ueh.melobi_nhom5.service;
 
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.firestore.DocumentReference;
@@ -9,7 +9,11 @@ import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+
+import vn.edu.ueh.melobi_nhom5.entity.Like;                         // chỉnh import nếu Like đã chuyển package
+import vn.edu.ueh.melobi_nhom5.model.Question;
 
 public class QuestionService {
     private static final String COL_QUESTIONS = "questions";
@@ -20,17 +24,43 @@ public class QuestionService {
 
     // ---------- CRUD ----------
 
-    /** imageUrl (nếu có) phải được upload trước qua FirebaseStorageManager rồi gán vào question. */
+    /**
+     * Tạo câu hỏi mới. Service tự chuẩn hóa: trim tiêu đề/nội dung, điền titleLower, status,
+     * likeCount, answerCount, createdAt/updatedAt, và lưu luôn id của document vào field "id"
+     * (MainActivity/QuestionAdapter đọc field này).
+     * imageUrl (nếu có) phải được upload trước rồi gán vào question.
+     * Task trả về DocumentReference của câu hỏi mới (ref.getId() = id câu hỏi).
+     */
     public Task<DocumentReference> createQuestion(Question question) {
-        return db.collection(COL_QUESTIONS).add(question);
+        String title = question.getTitle() != null ? question.getTitle().trim() : "";
+        String content = question.getContent() != null ? question.getContent().trim() : "";
+        long now = System.currentTimeMillis();
+
+        question.setTitle(title);
+        question.setContent(content);
+        question.setTitleLower(title.toLowerCase(Locale.ROOT));
+        question.setStatus(Question.STATUS_VISIBLE);
+        question.setLikeCount(0);
+        question.setAnswerCount(0);
+        question.setCreatedAt(now);
+        question.setUpdatedAt(now);
+
+        DocumentReference ref = db.collection(COL_QUESTIONS).document();   // sinh id trước
+        question.setId(ref.getId());
+        return ref.set(question).continueWith(task -> {
+            task.getResult();               // ném lại exception nếu ghi thất bại
+            return ref;
+        });
     }
 
     public Task<Void> updateQuestion(String questionId, String title, String content, String imageUrl) {
+        String cleanTitle = title != null ? title.trim() : "";
         Map<String, Object> data = new HashMap<>();
-        data.put("title", title);
+        data.put("title", cleanTitle);
+        data.put("titleLower", cleanTitle.toLowerCase(Locale.ROOT));
         data.put("content", content);
         data.put("imageUrl", imageUrl);
-        data.put("updatedAt", FieldValue.serverTimestamp());
+        data.put("updatedAt", System.currentTimeMillis());
         return db.collection(COL_QUESTIONS).document(questionId).update(data);
     }
 
@@ -48,7 +78,8 @@ public class QuestionService {
     // ---------- Danh sách / lọc ----------
 
     /** Phân trang: lần đầu truyền lastVisible = null, các lần sau truyền document cuối của trang trước.
-     *  Cần composite index (status + createdAt). */
+     *  Cần composite index (status + createdAt). Lưu ý: câu hỏi mẫu cũ chưa có field status
+     *  sẽ không xuất hiện ở truy vấn này. */
     public Task<QuerySnapshot> getQuestions(DocumentSnapshot lastVisible, int pageSize) {
         Query query = db.collection(COL_QUESTIONS)
                 .whereEqualTo("status", Question.STATUS_VISIBLE)

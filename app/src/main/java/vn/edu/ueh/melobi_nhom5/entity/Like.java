@@ -1,4 +1,4 @@
-package vn.edu.ueh.melobi_nhom5;
+package vn.edu.ueh.melobi_nhom5.entity;
 
 import com.google.firebase.firestore.DocumentId;
 import com.google.firebase.firestore.ServerTimestamp;

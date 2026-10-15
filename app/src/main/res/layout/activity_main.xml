@@ -146,5 +146,14 @@
             android:paddingTop="8dp"
             android:paddingBottom="12dp"
             tools:listitem="@layout/item_question" />
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/fabAskQuestion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:text="Đặt câu hỏi"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/melobi_primary" />
     </FrameLayout>
 </LinearLayout>

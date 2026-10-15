@@ -77,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
         rvQuestions = findViewById(R.id.rvQuestions);
         pbMainLoading = findViewById(R.id.pbMainLoading);
         tvMainEmpty = findViewById(R.id.tvMainEmpty);
+        findViewById(R.id.fabAskQuestion).setOnClickListener(v ->
+                startActivity(new Intent(this, CreateQuestionActivity.class)));
     }
 
     private void setupRecyclerView() {
