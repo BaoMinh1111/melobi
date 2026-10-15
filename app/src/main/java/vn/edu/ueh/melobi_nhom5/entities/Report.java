@@ -21,14 +21,14 @@ public class Report {
         this.targetId = targetId;
         this.targetType = targerType;
         this.reason = reason;
-        this.status = "Đang xử lý...";     //Báo cáo mới mặc định ở trạng thái chờ xử lý
+        this.status = "PENDING...";     //Báo cáo mới mặc định ở trạng thái chờ xử lý
         this.createdAt = System.currentTimeMillis();
     }
 
     public String getReportId() {return reportId; }
     public void setReportId(String reportId) {this.reportId = reportId; }
 
-    public String getReporterId() {return reporterId; }
+    public String getReporterId(String reportId) {return reporterId; }
     public void setReporterId() {this.reporterId = reporterId; }
 
     public String getTargetId() {return targetId; }
@@ -42,6 +42,9 @@ public class Report {
 
     public String getStatus() {return status; }
     public void setStatus() {this.status = status; }
+
+    public long getCreatedAt() {return createdAt; }
+    public void setCreatedAt(long createdAt) {this.createdAt = createdAt; }
 
 }
 /*1 số lỗi sau:
