@@ -1,3 +1,23 @@
 <resources>
-    <string name="app_name">Melobi - Nhóm 5</string>
+    <string name="app_name">Melobi</string>
+    <string name="title_discover_questions">Khám phá câu hỏi</string>
+    <string name="title_question_detail">Chi tiết câu hỏi</string>
+    <string name="title_comments">Bình luận</string>
+    <string name="hint_search_questions">Tìm kiếm câu hỏi...</string>
+    <string name="hint_write_answer">Viết câu trả lời của bạn...</string>
+    <string name="hint_write_comment">Viết bình luận...</string>
+    <string name="action_send">Gửi</string>
+    <string name="action_edit">Sửa</string>
+    <string name="action_delete">Xóa</string>
+    <string name="action_like">Thích</string>
+    <string name="action_comment">Bình luận</string>
+    <string name="action_init_sample_data">Khởi tạo dữ liệu mẫu Firestore (Dev)</string>
+    <string name="desc_back">Quay lại</string>
+    <string name="desc_edit">Chỉnh sửa</string>
+    <string name="desc_delete">Xóa bỏ</string>
+    <string name="desc_like">Nút thích</string>
+    <string name="desc_comment">Bình luận</string>
+    <string name="desc_send">Nút gửi</string>
+    <string name="desc_search">Tìm kiếm</string>
+    <string name="desc_options">Tùy chọn khác</string>
 </resources>
