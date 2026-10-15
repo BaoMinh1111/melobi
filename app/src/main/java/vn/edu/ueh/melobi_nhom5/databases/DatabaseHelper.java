@@ -9,13 +9,31 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "melobi_offline.db";
     private static final int DATABASE_VERSION = 1; //
 
-    private static final String TABLE_QUESTION = "Question";
-    private static final String TABLE_ANSWER = "Answer";
+    public static final String TABLE_QUESTION = "Question";
+    public static final String TABLE_ANSWER = "Answer";
 
-    private static final String COLUMN_ID = "id";
-    private static final String COLUMN_CONTENT = "content";
-    private static final String COLUMN_LIKE_COUNT = "likeCount";
-    private static final String COLUMN_CREATED_AT = "createdAt";
+    // Cột của bảng Question
+    public static final String COL_Q_ID = "questionId";
+    public static final String COL_Q_USER_ID = "userId";
+    public static final String COL_Q_MAJOR_ID = "majorId";
+    public static final String COL_Q_TITLE = "title";
+    public static final String COL_Q_CONTENT = "content";
+    public static final String COL_Q_IMAGE_URL = "imageUrl";
+    public static final String COL_Q_STATUS = "status";
+    public static final String COL_Q_LIKE_COUNT = "likeCount";      // Theo yêu cầu đồ án
+    public static final String COL_Q_ANSWER_COUNT = "answerCount";
+    public static final String COL_Q_CREATED_AT = "createdAt";
+    public static final String COL_Q_UPDATED_AT = "updatedAt";
+
+    // Cột của bảng Answer
+    public static final String COL_A_ID = "answerId";
+    public static final String COL_A_QUESTION_ID = "questionId";
+    public static final String COL_A_USER_ID = "userId";
+    public static final String COL_A_CONTENT = "content";
+    public static final String COL_A_STATUS = "status";
+    public static final String COL_A_LIKE_COUNT = "likeCount";      // Tiêu chí xếp hạng câu trả lời
+    public static final String COL_A_COMMENT_COUNT = "commentCount";
+    public static final String COL_A_CREATED_AT = "createdAt";
 
     /* Singleton */
     private static DatabaseHelper instance;
@@ -34,11 +52,30 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     /* Khởi tạo cấu trúc bảng (Chỉ chạy 1 lần duy nhất khi file .db được tạo) */
     @Override
     public void onCreate(SQLiteDatabase db) {
-        // Lệnh tạo bảng Question
-        String CREATE_QUESTION_TABLE = "CREATE TABLE " + TABLE_QUESTION + " (" + COLUMN_ID + " TEXT PRIMARY KEY, " + "userId TEXT, " + "major TEXT, " + COLUMN_CONTENT + " TEXT, " + COLUMN_LIKE_COUNT + " INTEGER DEFAULT 0, " + COLUMN_CREATED_AT + " INTEGER)";
+        // Câu lệnh SQL tạo bảng Question
+        String CREATE_QUESTION_TABLE = "CREATE TABLE " + TABLE_QUESTION + " ("
+                + COL_Q_ID + " TEXT PRIMARY KEY, "
+                + COL_Q_USER_ID + " TEXT, "
+                + COL_Q_MAJOR_ID + " TEXT, "
+                + COL_Q_TITLE + " TEXT, "
+                + COL_Q_CONTENT + " TEXT, "
+                + COL_Q_IMAGE_URL + " TEXT, "
+                + COL_Q_STATUS + " TEXT, "
+                + COL_Q_LIKE_COUNT + " INTEGER DEFAULT 0, "
+                + COL_Q_ANSWER_COUNT + " INTEGER DEFAULT 0, "
+                + COL_Q_CREATED_AT + " INTEGER, "
+                + COL_Q_UPDATED_AT + " INTEGER)";
 
-        // Lệnh tạo bảng Answer
-        String CREATE_ANSWER_TABLE = "CREATE TABLE " + TABLE_ANSWER + " (" + COLUMN_ID + " TEXT PRIMARY KEY, " + "questionId TEXT, " + "userId TEXT, " + COLUMN_CONTENT + " TEXT, " + COLUMN_LIKE_COUNT + " INTEGER DEFAULT 0, " + COLUMN_CREATED_AT + " INTEGER)";
+        // Câu lệnh SQL tạo bảng Answer
+        String CREATE_ANSWER_TABLE = "CREATE TABLE " + TABLE_ANSWER + " ("
+                + COL_A_ID + " TEXT PRIMARY KEY, "
+                + COL_A_QUESTION_ID + " TEXT, "
+                + COL_A_USER_ID + " TEXT, "
+                + COL_A_CONTENT + " TEXT, "
+                + COL_A_STATUS + " TEXT, "
+                + COL_A_LIKE_COUNT + " INTEGER DEFAULT 0, "
+                + COL_A_COMMENT_COUNT + " INTEGER DEFAULT 0, "
+                + COL_A_CREATED_AT + " INTEGER)";
 
         // Thực thi lệnh tạo bảng
         db.execSQL(CREATE_QUESTION_TABLE);
