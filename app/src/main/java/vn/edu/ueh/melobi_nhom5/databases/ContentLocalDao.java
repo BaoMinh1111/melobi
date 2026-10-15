@@ -107,7 +107,6 @@ public class ContentLocalDao {
     }
 }
 /*1 số lỗi sau:
-* Thiếu so với thiết kế: lớp này gồm saveQuestions, getQuestions, getQuestionById, saveAnswers, getAnswersByQuestion, clearOldCache. Code hiện chỉ có 2 hàm đầu
 * Chưa hỗ trợ đồng bộ hai chiều: SyncManager.pushPendingChanges() cần biết bản ghi nào được tạo hoặc sửa lúc offline. DAO chưa có cột hay hàm nào cho việc này
 -> Cách sửa: thêm:
 - Cột syncStatus (SYNCED / PENDING_CREATE / PENDING_UPDATE / PENDING_DELETE) vào bảng.
