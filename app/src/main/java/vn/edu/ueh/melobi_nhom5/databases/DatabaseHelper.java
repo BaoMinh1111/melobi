@@ -94,3 +94,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     }
 
 }
+/*1 số lối sau:
+* Thiếu cột phục vụ đồng bộ: SyncManager.pushPendingChanges() cần biết bản ghi nào tạo hoặc sửa lúc offline
+-> Cách sửa: thêm vào cả hai bảng:
+public static final String COL_Q_SYNC_STATUS = "syncStatus";
+public static final String COL_A_SYNC_STATUS = "syncStatus";
+* Chưa có Index
+* onUpgrade sẽ làm mất dữ liệu chưa đồng bộ:đã có syncStatus và dữ liệu PENDING_*, việc drop sẽ xóa luôn câu hỏi 
+hoặc câu trả lời người dùng viết lúc offline mà chưa đẩy lên Firebase
+* Thiếu thông tin hiển thị offline
+-> Cách sửa: 
+- Thêm cột authorName, authorAvatarUrl vào hai bảng.
+- Thêm bảng User cache rút gọn*/
