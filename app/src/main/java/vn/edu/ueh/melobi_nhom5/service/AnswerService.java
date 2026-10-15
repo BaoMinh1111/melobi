@@ -54,3 +54,12 @@ public class AnswerService {
         });
     }
 }
+/*1 số vấn đề:
+* Không nhất quán với thiết kế chung
+* Callback bị khai báo trùng: AnswerService.Callback và AnswerRepository.Callback giống nhau, nên đoạn bọc callback ở cuối 
+(new AnswerRepository.Callback<Answer>() { ... }) chỉ chuyển tiếp y nguyên và không làm gì thêm
+-> cách sửa: dùng một interface chung (đặt trong package common hoặc util), rồi truyền callback thẳng vào repository.
+* Dùng TextUtils (Android): lớp này sẽ không chạy trong unit test thuần JVM (trả mặc định hoặc lỗi “not mocked”)
+* Luồng callback: các lỗi validate được trả về đồng bộ (ngay trong lời gọi), còn lỗi từ Firestore trả về bất đồng bộ
+* Khó test và khó thay thế: new AnswerRepository() trong constructor làm service gắn chặt với Firestore
+-> Cách sửa: truyền repository qua constructor (AnswerService(AnswerRepository repo, NotificationService ns, QuestionService qs)) để dễ dùng mock.*/
