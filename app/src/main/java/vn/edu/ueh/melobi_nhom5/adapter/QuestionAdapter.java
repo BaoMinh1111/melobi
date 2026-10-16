@@ -36,6 +36,14 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
         notifyDataSetChanged();
     }
 
+    /** Nối thêm trang mới vào cuối danh sách (phân trang feed). */
+    public void addQuestions(List<Question> more) {
+        if (more == null || more.isEmpty()) return;
+        int start = questionList.size();
+        questionList.addAll(more);
+        notifyItemRangeInserted(start, more.size());
+    }
+
     @NonNull
     @Override
     public QuestionViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {

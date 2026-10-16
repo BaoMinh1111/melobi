@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import vn.edu.ueh.melobi_nhom5.entity.Like;                         // chỉnh import nếu Like đã chuyển package
+import vn.edu.ueh.melobi_nhom5.entity.Like;
 import vn.edu.ueh.melobi_nhom5.model.Question;
 
 public class QuestionService {
@@ -70,15 +70,37 @@ public class QuestionService {
         return db.collection(COL_QUESTIONS).document(questionId).delete();
     }
 
-    public Task<DocumentSnapshot> getQuestionDetail(String questionId) {
-        // dùng: snapshot.toObject(Question.class)
-        return db.collection(COL_QUESTIONS).document(questionId).get();
+    /**
+     * Chuyển document thành Question và điền id từ document ID (phòng khi document thiếu field "id").
+     * Trả về null nếu document không chuyển được.
+     */
+    public static Question toQuestion(DocumentSnapshot doc) {
+        Question q = doc.toObject(Question.class);
+        if (q != null && (q.getId() == null || q.getId().isEmpty())) q.setId(doc.getId());
+        return q;
+    }
+
+    /**
+     * Lấy chi tiết một câu hỏi. Kết quả của Task là null nếu câu hỏi không tồn tại
+     * hoặc không ở trạng thái VISIBLE (đã ẩn / đã xóa mềm) - màn hình gọi tự xử lý trường hợp này.
+     * Task thất bại (onFailure) chỉ khi lỗi mạng/quyền truy cập.
+     */
+    public Task<Question> getQuestionDetail(String questionId) {
+        return db.collection(COL_QUESTIONS).document(questionId).get().continueWith(task -> {
+            DocumentSnapshot snapshot = task.getResult();   // ném lại exception nếu tải lỗi
+            if (snapshot == null || !snapshot.exists()) return null;
+            Question q = toQuestion(snapshot);
+            if (q == null || !Question.STATUS_VISIBLE.equals(q.getStatus())) return null;
+            return q;
+        });
     }
 
     // ---------- Danh sách / lọc ----------
 
-    /** Phân trang: lần đầu truyền lastVisible = null, các lần sau truyền document cuối của trang trước.
-     *  Cần composite index (status + createdAt). Lưu ý: câu hỏi mẫu cũ chưa có field status
+    /** Feed: câu hỏi VISIBLE, mới nhất trước. Phân trang: lần đầu truyền lastVisible = null,
+     *  các lần sau truyền document cuối của trang trước (querySnapshot.getDocuments() phần tử cuối).
+     *  Trang cuối khi số document trả về < pageSize. Dùng toQuestion(doc) để chuyển thành Question.
+     *  Cần composite index (status + createdAt). Lưu ý: document chưa có field status
      *  sẽ không xuất hiện ở truy vấn này. */
     public Task<QuerySnapshot> getQuestions(DocumentSnapshot lastVisible, int pageSize) {
         Query query = db.collection(COL_QUESTIONS)
@@ -88,6 +110,18 @@ public class QuestionService {
         if (lastVisible != null) query = query.startAfter(lastVisible);
         return query.get();
         // TODO: dùng NetworkUtils.isOnline() để chọn Firebase hay SQLite khi offline
+    }
+
+    /** Lọc theo tên ngành (field "category" - feed đang dùng, có cả ở dữ liệu mẫu).
+     *  Cần composite index (status + category + createdAt). */
+    public Task<QuerySnapshot> filterByCategory(String category, DocumentSnapshot lastVisible, int pageSize) {
+        Query query = db.collection(COL_QUESTIONS)
+                .whereEqualTo("status", Question.STATUS_VISIBLE)
+                .whereEqualTo("category", category)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(pageSize);
+        if (lastVisible != null) query = query.startAfter(lastVisible);
+        return query.get();
     }
 
     /** Cần composite index (status + majorId + createdAt). */
@@ -160,13 +194,3 @@ public class QuestionService {
                 .update("status", Question.STATUS_HIDDEN);
     }
 }
-/*1 số lỗi nhỏ như sau:
-* updateQuestion xóa mất ảnh cũ. Nếu người dùng chỉ sửa chữ và truyền imageUrl = null, dòng data.put("imageUrl", imageUrl) sẽ ghi đè ảnh cũ thành null
--> Cách sửa: if (imageUrl != null) data.put("imageUrl", imageUrl);
-* mâu thuẫn với uploadQuestionImage(questionId, file). Thiết kế cần questionId để đặt tên ảnh, nhưng add() chỉ có ID sau khi tạo xong.
--> Cách sửa: tạo ID trước, upload ảnh, rồi mới ghi câu hỏi.
-* deleteQuestion để lại dữ liệu mồ côi. Firestore không tự xóa Answer, Comment, Like liên quan (khác với Composition trong sơ đồ lớp)
--> Cách sửa: 
-- Xóa mềm: đổi status thành DELETED rồi lọc ra khi hiển thị. Đơn giản, không mất dữ liệu
-- Xóa thật kèm xóa Answer, Comment bằng batch, phải phối hợp với C.
-* thiếu searchQuestions(keyword)*/

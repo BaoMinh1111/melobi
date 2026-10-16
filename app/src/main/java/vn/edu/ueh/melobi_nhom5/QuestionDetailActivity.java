@@ -38,7 +38,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
     /** Cách khuyến nghị: chỉ truyền ID, màn hình tự tải dữ liệu mới nhất từ Firestore. */
     public static final String EXTRA_QUESTION_ID = "extra_question_id";
-    /** Có thể truyền cả đối tượng Question (package gốc) để hiển thị ngay trong lúc tải. */
+    /** Có thể truyền cả đối tượng Question (model.Question) để hiển thị ngay trong lúc tải. */
     public static final String EXTRA_QUESTION = "extra_question";
 
     private String questionId;
@@ -123,15 +123,13 @@ public class QuestionDetailActivity extends AppCompatActivity {
     /** Tải câu hỏi mới nhất từ Firestore; đóng màn hình nếu đã bị xóa hoặc bị ẩn. */
     private void loadQuestion() {
         questionService.getQuestionDetail(questionId)
-                .addOnSuccessListener(snapshot -> {
+                .addOnSuccessListener(loaded -> {
                     if (isFinishing() || isDestroyed()) return;
-                    Question loaded = snapshot.toObject(Question.class);
-                    if (loaded == null || !Question.STATUS_VISIBLE.equals(loaded.getStatus())) {
+                    if (loaded == null) {      // không tồn tại hoặc không còn VISIBLE
                         Toast.makeText(this, "Câu hỏi không còn tồn tại", Toast.LENGTH_SHORT).show();
                         finish();
                         return;
                     }
-                    if (loaded.getId() == null || loaded.getId().isEmpty()) loaded.setId(snapshot.getId());
                     question = loaded;
                     displayQuestionInfo();
                     btnSendAnswer.setEnabled(true);
