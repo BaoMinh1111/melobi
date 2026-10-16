@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Answer implements Serializable {
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_HIDDEN = "HIDDEN";
+
     private String id;
     private String questionId;
     private String userId;
@@ -16,12 +19,14 @@ public class Answer implements Serializable {
     private long likes;
     private long commentCount;
     private List<String> likedUserIds;
+    private String status;
 
     public Answer() {
         this.likedUserIds = new ArrayList<>();
+        this.status = STATUS_ACTIVE;
     }
 
-    public Answer(String id, String questionId, String userId, String userName, String userAvatarUrl, String content, long createdAt, long updatedAt, long likes, long commentCount, List<String> likedUserIds) {
+    public Answer(String id, String questionId, String userId, String userName, String userAvatarUrl, String content, long createdAt, long updatedAt, long likes, long commentCount, List<String> likedUserIds, String status) {
         this.id = id;
         this.questionId = questionId;
         this.userId = userId;
@@ -33,6 +38,7 @@ public class Answer implements Serializable {
         this.likes = likes;
         this.commentCount = commentCount;
         this.likedUserIds = likedUserIds != null ? likedUserIds : new ArrayList<>();
+        this.status = status != null ? status : STATUS_ACTIVE;
     }
 
     public boolean isLikedBy(String userId) {
@@ -121,10 +127,29 @@ public class Answer implements Serializable {
     }
 
     public List<String> getLikedUserIds() {
+        if (likedUserIds == null) {
+            likedUserIds = new ArrayList<>();
+        }
         return likedUserIds;
     }
 
     public void setLikedUserIds(List<String> likedUserIds) {
         this.likedUserIds = likedUserIds != null ? likedUserIds : new ArrayList<>();
+    }
+
+    public String getStatus() {
+        return status != null ? status : STATUS_ACTIVE;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public boolean isHidden() {
+        return STATUS_HIDDEN.equals(status);
+    }
+
+    public void hideAnswer() {
+        this.status = STATUS_HIDDEN;
     }
 }
