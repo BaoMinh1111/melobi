@@ -1,4 +1,4 @@
-package vn.edu.ueh.melobi_nhom5.databases;
+package vn.edu.ueh.melobi_nhom5.database;
 
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;

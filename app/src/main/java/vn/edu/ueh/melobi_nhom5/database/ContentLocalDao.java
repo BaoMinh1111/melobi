@@ -1,11 +1,11 @@
-package vn.edu.ueh.melobi_nhom5.databases;
+package vn.edu.ueh.melobi_nhom5.database;
 
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
-import vn.edu.ueh.melobi_nhom5.entities.Question;
+import vn.edu.ueh.melobi_nhom5.entity.Question;
 
 import java.util.ArrayList;
 import java.util.List;

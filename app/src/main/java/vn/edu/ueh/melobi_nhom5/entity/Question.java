@@ -1,4 +1,4 @@
-package vn.edu.ueh.melobi_nhom5.entities;
+package vn.edu.ueh.melobi_nhom5.entity;
 
 public class Question {
     private String questionId;
