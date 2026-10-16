@@ -1,6 +1,7 @@
 package vn.edu.ueh.melobi_nhom5.model;
 
 import java.io.Serializable;
+import java.util.Locale;
 
 public class Question implements Serializable {
     public static final String STATUS_ACTIVE = "ACTIVE";
@@ -10,6 +11,7 @@ public class Question implements Serializable {
     private String userId;
     private String majorId;
     private String title;
+    private String titleLower;
     private String content;
     private String imageUrl;
     private String status;
@@ -27,6 +29,7 @@ public class Question implements Serializable {
     public Question(String id, String title, String content, String category, String userId, String userName, String userAvatarUrl, long createdAt, long answerCount) {
         this.questionId = id;
         this.title = title;
+        this.titleLower = title != null ? title.toLowerCase(Locale.ROOT) : null;
         this.content = content;
         this.userId = userId;
         this.majorId = category;
@@ -60,6 +63,15 @@ public class Question implements Serializable {
 
     public void setTitle(String title) {
         this.title = title;
+        this.titleLower = title != null ? title.toLowerCase(Locale.ROOT) : null;
+    }
+
+    public String getTitleLower() {
+        return titleLower;
+    }
+
+    public void setTitleLower(String titleLower) {
+        this.titleLower = titleLower;
     }
 
     public String getContent() {

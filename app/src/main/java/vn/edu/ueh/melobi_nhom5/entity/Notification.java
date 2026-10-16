@@ -19,6 +19,17 @@ public class Notification {
         this.createdAt = System.currentTimeMillis();
     }
 
+    /** Constructor đơn giản: NotificationService đang dùng. Tự điền isRead = false và createdAt. */
+    public Notification(String receiverId, String actorId, String type, String targetId, String targetType) {
+        this.receiverId = receiverId;
+        this.actorId = actorId;
+        this.type = type;
+        this.targetId = targetId;
+        this.targetType = targetType;
+        this.isRead = false;
+        this.createdAt = System.currentTimeMillis();
+    }
+
     public Notification(String notificationId, String receiverId, String actorId, String type, String targetId, String targetType, boolean isRead, long createdAt) {
         this.notificationId = notificationId;
         this.receiverId = receiverId;

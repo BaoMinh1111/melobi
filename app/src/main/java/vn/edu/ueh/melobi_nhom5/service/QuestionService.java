@@ -39,7 +39,7 @@ public class QuestionService {
         question.setTitle(title);
         question.setContent(content);
         question.setTitleLower(title.toLowerCase(Locale.ROOT));
-        question.setStatus(Question.STATUS_VISIBLE);
+        question.setStatus(Question.STATUS_ACTIVE);
         question.setLikeCount(0);
         question.setAnswerCount(0);
         question.setCreatedAt(now);
@@ -82,7 +82,7 @@ public class QuestionService {
 
     /**
      * Lấy chi tiết một câu hỏi. Kết quả của Task là null nếu câu hỏi không tồn tại
-     * hoặc không ở trạng thái VISIBLE (đã ẩn / đã xóa mềm) - màn hình gọi tự xử lý trường hợp này.
+     * hoặc không ở trạng thái ACTIVE (đã ẩn / đã xóa mềm) - màn hình gọi tự xử lý trường hợp này.
      * Task thất bại (onFailure) chỉ khi lỗi mạng/quyền truy cập.
      */
     public Task<Question> getQuestionDetail(String questionId) {
@@ -90,21 +90,21 @@ public class QuestionService {
             DocumentSnapshot snapshot = task.getResult();   // ném lại exception nếu tải lỗi
             if (snapshot == null || !snapshot.exists()) return null;
             Question q = toQuestion(snapshot);
-            if (q == null || !Question.STATUS_VISIBLE.equals(q.getStatus())) return null;
+            if (q == null || !Question.STATUS_ACTIVE.equals(q.getStatus())) return null;
             return q;
         });
     }
 
     // ---------- Danh sách / lọc ----------
 
-    /** Feed: câu hỏi VISIBLE, mới nhất trước. Phân trang: lần đầu truyền lastVisible = null,
+    /** Feed: câu hỏi ACTIVE, mới nhất trước. Phân trang: lần đầu truyền lastVisible = null,
      *  các lần sau truyền document cuối của trang trước (querySnapshot.getDocuments() phần tử cuối).
      *  Trang cuối khi số document trả về < pageSize. Dùng toQuestion(doc) để chuyển thành Question.
      *  Cần composite index (status + createdAt). Lưu ý: document chưa có field status
      *  sẽ không xuất hiện ở truy vấn này. */
     public Task<QuerySnapshot> getQuestions(DocumentSnapshot lastVisible, int pageSize) {
         Query query = db.collection(COL_QUESTIONS)
-                .whereEqualTo("status", Question.STATUS_VISIBLE)
+                .whereEqualTo("status", Question.STATUS_ACTIVE)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(pageSize);
         if (lastVisible != null) query = query.startAfter(lastVisible);
@@ -116,7 +116,7 @@ public class QuestionService {
      *  Cần composite index (status + category + createdAt). */
     public Task<QuerySnapshot> filterByCategory(String category, DocumentSnapshot lastVisible, int pageSize) {
         Query query = db.collection(COL_QUESTIONS)
-                .whereEqualTo("status", Question.STATUS_VISIBLE)
+                .whereEqualTo("status", Question.STATUS_ACTIVE)
                 .whereEqualTo("category", category)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(pageSize);
@@ -127,7 +127,7 @@ public class QuestionService {
     /** Cần composite index (status + majorId + createdAt). */
     public Task<QuerySnapshot> filterByMajor(String majorId, DocumentSnapshot lastVisible, int pageSize) {
         Query query = db.collection(COL_QUESTIONS)
-                .whereEqualTo("status", Question.STATUS_VISIBLE)
+                .whereEqualTo("status", Question.STATUS_ACTIVE)
                 .whereEqualTo("majorId", majorId)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(pageSize);
