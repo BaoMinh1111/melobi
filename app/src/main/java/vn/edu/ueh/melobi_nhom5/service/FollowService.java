@@ -77,6 +77,58 @@ public class FollowService {
         return false;
     }
 
+
+    // Lay danh sach ID nguoi dang theo doi userId
+    public List<String> getFollowers(String userId) {
+        validateUserId(userId);
+
+        List<String> followers = new ArrayList<>();
+
+        for (Follow follow : follows) {
+            if ("USER".equals(follow.getTargetType())
+                    && userId.equals(follow.getTargetId())) {
+                followers.add(follow.getFollowerId());
+            }
+        }
+
+        return followers;
+    }
+
+    // Lay danh sach ID nguoi ma userId dang theo doi
+    public List<String> getFollowing(String userId) {
+        validateUserId(userId);
+
+        List<String> following = new ArrayList<>();
+
+        for (Follow follow : follows) {
+            if ("USER".equals(follow.getTargetType())
+                    && userId.equals(follow.getFollowerId())) {
+                following.add(follow.getTargetId());
+            }
+        }
+
+        return following;
+    }
+
+    // Dem so nguoi theo doi
+    public int getFollowerCount(String userId) {
+        return getFollowers(userId).size();
+    }
+
+    // Dem so nguoi dang theo doi
+    public int getFollowingCount(String userId) {
+        return getFollowing(userId).size();
+    }
+
+    // Kiem tra ID hop le
+    private void validateUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "User ID khong duoc de trong"
+            );
+        }
+    }
+
     private void validateIds(String followerId, String followingId) {
         if (followerId == null || followerId.isBlank()
                 || followingId == null || followingId.isBlank()) {
