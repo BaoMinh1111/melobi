@@ -12,6 +12,9 @@ public class Question {
     private int answerCount;
     private long createdAt;
     private long updatedAt;
+    private String syncStatus = "SYNCED";
+    private String authorName;
+    private String authorAvatarUrl;
 
     // Constructor rỗng (Bắt buộc cho Firebase/Firestore toObject)
     public Question() {
@@ -64,4 +67,13 @@ public class Question {
 
     public long getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(long updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getSyncStatus() {return syncStatus; }
+    public void setSyncStatus(String syncStatus) {this.syncStatus = syncStatus; }
+
+    public String getAuthorName() {return authorName; }
+    public void setAuthorName(String authorName) {this.authorName = authorName; }
+
+    public String getAuthorAvatarUrl() {return authorAvatarUrl; }
+    public void setAuthorAvatarUrl(String authorAvatarUrl) {this.authorAvatarUrl = authorAvatarUrl; }
 }
