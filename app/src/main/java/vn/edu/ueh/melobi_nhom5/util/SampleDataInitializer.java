@@ -9,15 +9,59 @@ import com.google.firebase.firestore.WriteBatch;
 import java.util.ArrayList;
 import java.util.List;
 
+import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.Question;
 
 public class SampleDataInitializer {
     private static final String TAG = "SampleDataInitializer";
+    private static final String COLLECTION_MAJORS = "majors";
     private static final String COLLECTION_QUESTIONS = "questions";
 
     public interface InitCallback {
         void onSuccess(String message);
         void onError(Exception e);
+    }
+
+    public static List<Major> getSampleMajors() {
+        List<Major> sampleMajors = new ArrayList<>();
+        sampleMajors.add(new Major("it", "Công nghệ thông tin", "Lập trình, dữ liệu, AI, mạng máy tính và phát triển phần mềm."));
+        sampleMajors.add(new Major("business", "Kinh tế", "Kinh tế học, quản trị kinh doanh và phân tích thị trường."));
+        sampleMajors.add(new Major("finance", "Tài chính", "Tài chính doanh nghiệp, đầu tư, ngân hàng và chứng khoán."));
+        sampleMajors.add(new Major("marketing", "Marketing", "Digital marketing, thương hiệu, truyền thông và chiến lược nội dung."));
+        sampleMajors.add(new Major("languages", "Ngoại ngữ", "Tiếng Anh, tiếng Trung, giao tiếp quốc tế và biên phiên dịch."));
+        sampleMajors.add(new Major("education", "Giáo dục", "Phương pháp giảng dạy, công nghệ giáo dục và phát triển người học."));
+        sampleMajors.add(new Major("science", "Khoa học", "Nghiên cứu khoa học, phân tích dữ liệu và tư duy thực nghiệm."));
+        sampleMajors.add(new Major("design", "Thiết kế", "UI/UX, đồ họa, mỹ thuật số và tư duy sáng tạo."));
+        sampleMajors.add(new Major("other", "Khác", "Các lĩnh vực liên ngành hoặc chủ đề quan tâm khác."));
+        return sampleMajors;
+    }
+
+    public static void initializeSampleMajors(InitCallback callback) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        List<Major> sampleMajors = getSampleMajors();
+
+        WriteBatch batch = db.batch();
+        for (Major major : sampleMajors) {
+            batch.set(
+                    db.collection(COLLECTION_MAJORS).document(major.getMajorId()),
+                    major,
+                    SetOptions.merge()
+            );
+        }
+
+        batch.commit()
+                .addOnSuccessListener(unused -> {
+                    Log.d(TAG, "Khởi tạo thành công " + sampleMajors.size() + " chuyên ngành mẫu");
+                    if (callback != null) {
+                        callback.onSuccess("Đã khởi tạo " + sampleMajors.size() + " chuyên ngành mẫu.");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Lỗi tạo danh sách chuyên ngành mẫu: ", e);
+                    if (callback != null) {
+                        callback.onError(e);
+                    }
+                });
     }
 
     public static void initializeSampleQuestions(InitCallback callback) {

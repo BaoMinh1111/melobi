@@ -2,6 +2,8 @@ package vn.edu.ueh.melobi_nhom5.service;
 
 import android.text.TextUtils;
 
+import java.util.List;
+
 import vn.edu.ueh.melobi_nhom5.model.Answer;
 import vn.edu.ueh.melobi_nhom5.repository.AnswerRepository;
 
@@ -17,29 +19,41 @@ public class AnswerService {
         void onError(Exception e);
     }
 
-    /**
-     * Tạo và lưu câu trả lời mới vào Firestore
-     */
     public void createAnswer(String questionId, String userId, String userName, String userAvatarUrl, String content, Callback<Answer> callback) {
-        if (TextUtils.isEmpty(questionId)) {
-            if (callback != null) callback.onError(new IllegalArgumentException("ID câu hỏi không hợp lệ"));
-            return;
-        }
-        if (TextUtils.isEmpty(userId)) {
-            if (callback != null) callback.onError(new IllegalArgumentException("ID người dùng không hợp lệ"));
-            return;
-        }
-        if (TextUtils.isEmpty(content) || content.trim().isEmpty()) {
-            if (callback != null) callback.onError(new IllegalArgumentException("Nội dung câu trả lời không được để trống"));
-            return;
-        }
-
         Answer answer = new Answer();
         answer.setQuestionId(questionId);
         answer.setUserId(userId);
         answer.setUserName(TextUtils.isEmpty(userName) ? "Thành viên" : userName);
         answer.setUserAvatarUrl(userAvatarUrl != null ? userAvatarUrl : "");
-        answer.setContent(content.trim());
+        answer.setContent(content != null ? content.trim() : "");
+        createAnswer(answer, callback);
+    }
+
+    public void createAnswer(Answer answer, Callback<Answer> callback) {
+        if (answer == null) {
+            if (callback != null) callback.onError(new IllegalArgumentException("Câu trả lời không hợp lệ"));
+            return;
+        }
+        if (TextUtils.isEmpty(answer.getQuestionId())) {
+            if (callback != null) callback.onError(new IllegalArgumentException("ID câu hỏi không hợp lệ"));
+            return;
+        }
+        if (TextUtils.isEmpty(answer.getUserId())) {
+            if (callback != null) callback.onError(new IllegalArgumentException("ID người dùng không hợp lệ"));
+            return;
+        }
+        if (TextUtils.isEmpty(answer.getContent()) || answer.getContent().trim().isEmpty()) {
+            if (callback != null) callback.onError(new IllegalArgumentException("Nội dung câu trả lời không được để trống"));
+            return;
+        }
+
+        answer.setContent(answer.getContent().trim());
+        if (TextUtils.isEmpty(answer.getUserName())) {
+            answer.setUserName("Thành viên");
+        }
+        if (answer.getUserAvatarUrl() == null) {
+            answer.setUserAvatarUrl("");
+        }
 
         answerRepository.addAnswer(answer, new AnswerRepository.Callback<Answer>() {
             @Override
@@ -53,13 +67,23 @@ public class AnswerService {
             }
         });
     }
+
+    public void getAnswersByQuestion(String questionId, Callback<List<Answer>> callback) {
+        if (TextUtils.isEmpty(questionId)) {
+            if (callback != null) callback.onError(new IllegalArgumentException("ID câu hỏi không hợp lệ"));
+            return;
+        }
+
+        answerRepository.getAnswersByQuestionId(questionId, new AnswerRepository.Callback<List<Answer>>() {
+            @Override
+            public void onSuccess(List<Answer> result) {
+                if (callback != null) callback.onSuccess(result);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (callback != null) callback.onError(e);
+            }
+        });
+    }
 }
-/*1 số vấn đề:
-* Không nhất quán với thiết kế chung
-* Callback bị khai báo trùng: AnswerService.Callback và AnswerRepository.Callback giống nhau, nên đoạn bọc callback ở cuối 
-(new AnswerRepository.Callback<Answer>() { ... }) chỉ chuyển tiếp y nguyên và không làm gì thêm
--> cách sửa: dùng một interface chung (đặt trong package common hoặc util), rồi truyền callback thẳng vào repository.
-* Dùng TextUtils (Android): lớp này sẽ không chạy trong unit test thuần JVM (trả mặc định hoặc lỗi “not mocked”)
-* Luồng callback: các lỗi validate được trả về đồng bộ (ngay trong lời gọi), còn lỗi từ Firestore trả về bất đồng bộ
-* Khó test và khó thay thế: new AnswerRepository() trong constructor làm service gắn chặt với Firestore
--> Cách sửa: truyền repository qua constructor (AnswerService(AnswerRepository repo, NotificationService ns, QuestionService qs)) để dễ dùng mock.*/

@@ -89,6 +89,11 @@ public class QuestionDetailActivity extends AppCompatActivity {
         questionService = new QuestionService();
         notificationService = new NotificationService();
         currentUser = AuthHelper.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
         initViews();
         setupRecyclerView();

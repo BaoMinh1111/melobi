@@ -3,7 +3,7 @@ package vn.edu.ueh.melobi_nhom5.model;
 import java.io.Serializable;
 
 public class Comment implements Serializable {
-    private String id;
+    private String commentId;
     private String answerId;
     private String userId;
     private String userName;
@@ -16,7 +16,7 @@ public class Comment implements Serializable {
     }
 
     public Comment(String id, String answerId, String userId, String userName, String userAvatarUrl, String content, long createdAt, long updatedAt) {
-        this.id = id;
+        this.commentId = id;
         this.answerId = answerId;
         this.userId = userId;
         this.userName = userName;
@@ -27,11 +27,19 @@ public class Comment implements Serializable {
     }
 
     public String getId() {
-        return id;
+        return commentId;
     }
 
     public void setId(String id) {
-        this.id = id;
+        this.commentId = id;
+    }
+
+    public String getCommentId() {
+        return commentId;
+    }
+
+    public void setCommentId(String commentId) {
+        this.commentId = commentId;
     }
 
     public String getAnswerId() {

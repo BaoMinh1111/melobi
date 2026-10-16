@@ -1,7 +1,12 @@
 package vn.edu.ueh.melobi_nhom5.entity;
 
 import java.util.UUID;
+
 public class Report {
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_RESOLVED = "RESOLVED";
+    public static final String STATUS_REJECTED = "REJECTED";
+
     private String reportId;
     private String reporterId;
     private String targetId;
@@ -10,40 +15,74 @@ public class Report {
     private String status;
     private long createdAt;
 
-    // Constructor rỗng - Bắt buộc có để hỗ trợ Firebase Realtime Database/FireStore tự động parse dữ liệu
-    public Report(){}
-
-    public Report(String reporterId, String targetId, String targerType, String reason) {
-        //Tự động tạo ID ngẫu nhiên cho báo cáo
-        this.reportId = UUID.randomUUID().toString();
-        // Sau này dùng FireBase, có thể thay bằng ID do FireBase tạo ra bằng lệnh [push().getKey()]
-        this.reporterId = reporterId;
-        this.targetId = targetId;
-        this.targetType = targerType;
-        this.reason = reason;
-        this.status = "PENDING...";     //Báo cáo mới mặc định ở trạng thái chờ xử lý
+    public Report() {
+        this.status = STATUS_PENDING;
         this.createdAt = System.currentTimeMillis();
     }
 
-    public String getReportId() {return reportId; }
-    public void setReportId(String reportId) {this.reportId = reportId; }
+    public Report(String reporterId, String targetId, String targetType, String reason) {
+        this.reportId = UUID.randomUUID().toString();
+        this.reporterId = reporterId;
+        this.targetId = targetId;
+        this.targetType = targetType;
+        this.reason = reason;
+        this.status = STATUS_PENDING;
+        this.createdAt = System.currentTimeMillis();
+    }
 
-    public String getReporterId(String reportId) {return reporterId; }
-    public void setReporterId() {this.reporterId = reporterId; }
+    public String getReportId() {
+        return reportId;
+    }
 
-    public String getTargetId() {return targetId; }
-    public void setTargetId() {this.targetId = targetId; }
+    public void setReportId(String reportId) {
+        this.reportId = reportId;
+    }
 
-    public String getTargetType() {return targetType; }
-    public void setTargetType() {this.targetType = targetType; }
+    public String getReporterId() {
+        return reporterId;
+    }
 
-    public String getReason() {return reason; }
-    public void setReason() {this.reason = reason; }
+    public void setReporterId(String reporterId) {
+        this.reporterId = reporterId;
+    }
 
-    public String getStatus() {return status; }
-    public void setStatus() {this.status = status; }
+    public String getTargetId() {
+        return targetId;
+    }
 
-    public long getCreatedAt() {return createdAt; }
-    public void setCreatedAt(long createdAt) {this.createdAt = createdAt; }
+    public void setTargetId(String targetId) {
+        this.targetId = targetId;
+    }
 
+    public String getTargetType() {
+        return targetType;
+    }
+
+    public void setTargetType(String targetType) {
+        this.targetType = targetType;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
+    }
 }

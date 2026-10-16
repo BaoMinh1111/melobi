@@ -79,6 +79,12 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        if (currentUser == null) {
+            Toast.makeText(getContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Toast.LENGTH_SHORT).show();
+            dismissAllowingStateLoss();
+            return;
+        }
+
         rvComments = view.findViewById(R.id.rvComments);
         pbCommentsLoading = view.findViewById(R.id.pbCommentsLoading);
         tvEmptyComments = view.findViewById(R.id.tvEmptyComments);

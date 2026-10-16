@@ -3,12 +3,16 @@ package vn.edu.ueh.melobi_nhom5.service;
 import android.text.TextUtils;
 import android.util.Patterns;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.firebase.FirebaseNetworkException;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
 import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 import com.google.firebase.auth.FirebaseAuthUserCollisionException;
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException;
+import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -150,54 +154,38 @@ public class UserService {
                         notifyError(callback, new IllegalStateException("Không lấy được thông tin tài khoản"));
                         return;
                     }
-                    getProfile(firebaseUser.getUid(), new Callback<User>() {
-                        @Override
-                        public void onSuccess(User result) {
-                            if (result == null) {
-                                User fallbackUser = buildFallbackUser(firebaseUser);
-                                saveUserDocument(fallbackUser, callback);
-                                return;
-                            }
-
-                            if (User.STATUS_LOCKED.equalsIgnoreCase(result.getStatus())) {
-                                auth.signOut();
-                                notifyError(callback, new IllegalStateException("Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên."));
-                                return;
-                            }
-
-                            if (TextUtils.isEmpty(result.getFullName())) {
-                                result.setFullName(resolveDisplayName(firebaseUser));
-                            }
-                            if (TextUtils.isEmpty(result.getEmail())) {
-                                result.setEmail(firebaseUser.getEmail() != null ? firebaseUser.getEmail() : "");
-                            }
-                            if (TextUtils.isEmpty(result.getMajorId())) {
-                                result.setMajorId(DEFAULT_MAJOR_ID);
-                            }
-                            if (TextUtils.isEmpty(result.getRole())) {
-                                result.setRole(User.ROLE_USER);
-                            }
-                            if (TextUtils.isEmpty(result.getStatus())) {
-                                result.setStatus(User.STATUS_ACTIVE);
-                            }
-
-                            saveUserDocument(result, callback);
-                        }
-
-                        @Override
-                        public void onError(Exception e) {
-                            notifyError(callback, e);
-                        }
-                    });
+                    handleSignedInFirebaseUser(firebaseUser, callback);
                 })
                 .addOnFailureListener(e -> notifyError(callback, mapAuthException(e)));
     }
 
-    public void loginWithGoogle(Callback<User> callback) {
-        notifyError(callback, new UnsupportedOperationException("loginWithGoogle() chưa được tích hợp trong phiên bản hiện tại."));
+    public void loginWithGoogle(String idToken, Callback<User> callback) {
+        if (TextUtils.isEmpty(idToken)) {
+            notifyError(callback, new IllegalArgumentException("Google ID Token không hợp lệ"));
+            return;
+        }
+
+        auth.signInWithCredential(GoogleAuthProvider.getCredential(idToken, null))
+                .addOnSuccessListener(authResult -> {
+                    FirebaseUser firebaseUser = authResult.getUser();
+                    if (firebaseUser == null) {
+                        notifyError(callback, new IllegalStateException("Không lấy được thông tin tài khoản Google"));
+                        return;
+                    }
+                    handleSignedInFirebaseUser(firebaseUser, callback);
+                })
+                .addOnFailureListener(e -> notifyError(callback, mapAuthException(e)));
     }
 
     public void logout() {
+        try {
+            GoogleSignInOptions googleSignInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .build();
+            GoogleSignIn.getClient(FirebaseApp.getInstance().getApplicationContext(), googleSignInOptions).signOut();
+        } catch (Exception ignored) {
+            // Không chặn đăng xuất Firebase nếu GoogleSignIn client không khả dụng.
+        }
         auth.signOut();
     }
 
@@ -325,6 +313,51 @@ public class UserService {
 
     public boolean isLoggedIn() {
         return auth.getCurrentUser() != null;
+    }
+
+    private void handleSignedInFirebaseUser(FirebaseUser firebaseUser, Callback<User> callback) {
+        getProfile(firebaseUser.getUid(), new Callback<User>() {
+            @Override
+            public void onSuccess(User result) {
+                if (result == null) {
+                    User fallbackUser = buildFallbackUser(firebaseUser);
+                    saveUserDocument(fallbackUser, callback);
+                    return;
+                }
+
+                if (User.STATUS_LOCKED.equalsIgnoreCase(result.getStatus())) {
+                    logout();
+                    notifyError(callback, new IllegalStateException("Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên."));
+                    return;
+                }
+
+                if (TextUtils.isEmpty(result.getFullName())) {
+                    result.setFullName(resolveDisplayName(firebaseUser));
+                }
+                if (TextUtils.isEmpty(result.getEmail())) {
+                    result.setEmail(firebaseUser.getEmail() != null ? firebaseUser.getEmail() : "");
+                }
+                if (TextUtils.isEmpty(result.getAvatarUrl()) && firebaseUser.getPhotoUrl() != null) {
+                    result.setAvatarUrl(firebaseUser.getPhotoUrl().toString());
+                }
+                if (TextUtils.isEmpty(result.getMajorId())) {
+                    result.setMajorId(DEFAULT_MAJOR_ID);
+                }
+                if (TextUtils.isEmpty(result.getRole())) {
+                    result.setRole(User.ROLE_USER);
+                }
+                if (TextUtils.isEmpty(result.getStatus())) {
+                    result.setStatus(User.STATUS_ACTIVE);
+                }
+
+                saveUserDocument(result, callback);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                notifyError(callback, e);
+            }
+        });
     }
 
     private User buildFallbackUser(FirebaseUser firebaseUser) {

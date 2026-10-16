@@ -81,4 +81,8 @@ public class Message {
     public void setIsRead(boolean isRead) {
         this.isRead = isRead;
     }
+
+    public boolean isRead() {
+        return isRead;
+    }
 }

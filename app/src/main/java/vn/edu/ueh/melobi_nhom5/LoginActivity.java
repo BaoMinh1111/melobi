@@ -8,9 +8,15 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.material.textfield.TextInputEditText;
 
 import vn.edu.ueh.melobi_nhom5.model.User;
@@ -23,10 +29,44 @@ public class LoginActivity extends AppCompatActivity {
     private TextInputEditText etEmail;
     private TextInputEditText etPassword;
     private Button btnLogin;
+    private Button btnLoginGoogle;
     private ProgressBar pbLogin;
     private TextView tvOpenRegister;
 
     private UserService userService;
+    private final ActivityResultLauncher<Intent> googleSignInLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getData() == null) {
+                            setLoading(false);
+                            Toast.makeText(this, "Không nhận được dữ liệu đăng nhập Google", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        try {
+                            GoogleSignInAccount account = GoogleSignIn.getSignedInAccountFromIntent(result.getData())
+                                    .getResult(ApiException.class);
+                            String idToken = account != null ? account.getIdToken() : null;
+                            userService.loginWithGoogle(idToken, new UserService.Callback<User>() {
+                                @Override
+                                public void onSuccess(User resultUser) {
+                                    Toast.makeText(LoginActivity.this, R.string.message_login_success, Toast.LENGTH_SHORT).show();
+                                    openMainAndFinish();
+                                }
+
+                                @Override
+                                public void onError(Exception e) {
+                                    setLoading(false);
+                                    Toast.makeText(LoginActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        } catch (ApiException e) {
+                            setLoading(false);
+                            Toast.makeText(this, "Đăng nhập Google thất bại: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+            );
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -48,12 +88,14 @@ public class LoginActivity extends AppCompatActivity {
         etEmail = findViewById(R.id.etLoginEmail);
         etPassword = findViewById(R.id.etLoginPassword);
         btnLogin = findViewById(R.id.btnLogin);
+        btnLoginGoogle = findViewById(R.id.btnLoginGoogle);
         pbLogin = findViewById(R.id.pbLogin);
         tvOpenRegister = findViewById(R.id.tvOpenRegister);
     }
 
     private void setupActions() {
         btnLogin.setOnClickListener(v -> attemptLogin());
+        btnLoginGoogle.setOnClickListener(v -> attemptGoogleLogin());
         tvOpenRegister.setOnClickListener(v ->
                 startActivity(new Intent(LoginActivity.this, RegisterActivity.class))
         );
@@ -84,9 +126,30 @@ public class LoginActivity extends AppCompatActivity {
         });
     }
 
+    private void attemptGoogleLogin() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        setLoading(true);
+        String webClientId = getString(R.string.google_web_client_id).trim();
+        if (webClientId.isEmpty()) {
+            setLoading(false);
+            Toast.makeText(this, "Dự án chưa cấu hình Google Web Client ID trong Firebase.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        GoogleSignInOptions googleSignInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(webClientId)
+                .requestEmail()
+                .build();
+        googleSignInLauncher.launch(GoogleSignIn.getClient(this, googleSignInOptions).getSignInIntent());
+    }
+
     private void setLoading(boolean isLoading) {
         pbLogin.setVisibility(isLoading ? View.VISIBLE : View.GONE);
         btnLogin.setEnabled(!isLoading);
+        btnLoginGoogle.setEnabled(!isLoading);
         tvOpenRegister.setEnabled(!isLoading);
     }
 

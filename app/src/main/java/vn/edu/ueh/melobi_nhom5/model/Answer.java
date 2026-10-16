@@ -8,7 +8,7 @@ public class Answer implements Serializable {
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_HIDDEN = "HIDDEN";
 
-    private String id;
+    private String answerId;
     private String questionId;
     private String userId;
     private String userName;
@@ -16,7 +16,7 @@ public class Answer implements Serializable {
     private String content;
     private long createdAt;
     private long updatedAt;
-    private long likes;
+    private long likeCount;
     private long commentCount;
     private List<String> likedUserIds;
     private String status;
@@ -27,7 +27,7 @@ public class Answer implements Serializable {
     }
 
     public Answer(String id, String questionId, String userId, String userName, String userAvatarUrl, String content, long createdAt, long updatedAt, long likes, long commentCount, List<String> likedUserIds, String status) {
-        this.id = id;
+        this.answerId = id;
         this.questionId = questionId;
         this.userId = userId;
         this.userName = userName;
@@ -35,7 +35,7 @@ public class Answer implements Serializable {
         this.content = content;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
-        this.likes = likes;
+        this.likeCount = likes;
         this.commentCount = commentCount;
         this.likedUserIds = likedUserIds != null ? likedUserIds : new ArrayList<>();
         this.status = status != null ? status : STATUS_ACTIVE;
@@ -47,11 +47,19 @@ public class Answer implements Serializable {
     }
 
     public String getId() {
-        return id;
+        return answerId;
     }
 
     public void setId(String id) {
-        this.id = id;
+        this.answerId = id;
+    }
+
+    public String getAnswerId() {
+        return answerId;
+    }
+
+    public void setAnswerId(String answerId) {
+        this.answerId = answerId;
     }
 
     public String getQuestionId() {
@@ -111,11 +119,19 @@ public class Answer implements Serializable {
     }
 
     public long getLikes() {
-        return likes;
+        return likeCount;
     }
 
     public void setLikes(long likes) {
-        this.likes = likes;
+        this.likeCount = likes;
+    }
+
+    public long getLikeCount() {
+        return likeCount;
+    }
+
+    public void setLikeCount(long likeCount) {
+        this.likeCount = likeCount;
     }
 
     public long getCommentCount() {
