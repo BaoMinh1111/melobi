@@ -43,7 +43,7 @@
         <EditText
             android:id="@+id/etSearchQuestion"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
+            android:layout_height="48dp"
             android:layout_marginTop="10dp"
             android:background="@drawable/bg_input_field"
             android:drawableStart="@drawable/ic_search"
@@ -144,7 +144,26 @@
             android:clipToPadding="false"
             android:paddingHorizontal="12dp"
             android:paddingTop="8dp"
-            android:paddingBottom="12dp"
+            android:paddingBottom="88dp"
             tools:listitem="@layout/item_question" />
+
+        <!-- Vòng xoay khi tải thêm trang tiếp theo của feed -->
+        <ProgressBar
+            android:id="@+id/pbLoadMore"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone" />
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/fabAskQuestion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:text="Đặt câu hỏi"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/melobi_primary" />
     </FrameLayout>
 </LinearLayout>

@@ -19,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
 
+import java.io.Serializable;
 import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.adapter.AnswerAdapter;
@@ -27,15 +28,25 @@ import vn.edu.ueh.melobi_nhom5.model.Question;
 import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.repository.AnswerRepository;
 import vn.edu.ueh.melobi_nhom5.service.AnswerService;
+import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
+import vn.edu.ueh.melobi_nhom5.service.NotificationService;
+import vn.edu.ueh.melobi_nhom5.entity.Notification;
+import vn.edu.ueh.melobi_nhom5.entity.Like;
 
 public class QuestionDetailActivity extends AppCompatActivity {
 
+    /** Cách khuyến nghị: chỉ truyền ID, màn hình tự tải dữ liệu mới nhất từ Firestore. */
+    public static final String EXTRA_QUESTION_ID = "extra_question_id";
+    /** Có thể truyền cả đối tượng Question (model.Question) để hiển thị ngay trong lúc tải. */
     public static final String EXTRA_QUESTION = "extra_question";
 
-    private Question question;
+    private String questionId;
+    private Question question;               // có thể null cho tới khi tải xong
     private AnswerRepository answerRepository;
     private AnswerService answerService;
+    private QuestionService questionService;
+    private NotificationService notificationService;
     private AnswerAdapter answerAdapter;
     private User currentUser;
 
@@ -60,11 +71,14 @@ public class QuestionDetailActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_question_detail);
 
-        if (getIntent() != null && getIntent().hasExtra(EXTRA_QUESTION)) {
-            question = (Question) getIntent().getSerializableExtra(EXTRA_QUESTION);
+        questionId = getIntent().getStringExtra(EXTRA_QUESTION_ID);
+        Serializable extra = getIntent().getSerializableExtra(EXTRA_QUESTION);
+        if (extra instanceof Question) {          // instanceof: nếu caller truyền nhầm lớp khác thì không crash
+            question = (Question) extra;
+            if (questionId == null || questionId.isEmpty()) questionId = question.getQuestionId();
         }
 
-        if (question == null) {
+        if (questionId == null || questionId.isEmpty()) {
             Toast.makeText(this, "Không tìm thấy thông tin câu hỏi", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -72,15 +86,19 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
         answerRepository = new AnswerRepository();
         answerService = new AnswerService();
+        questionService = new QuestionService();
+        notificationService = new NotificationService();
         currentUser = AuthHelper.getCurrentUser();
 
         initViews();
-        displayQuestionInfo();
         setupRecyclerView();
 
         toolbarDetail.setNavigationOnClickListener(v -> finish());
         btnSendAnswer.setOnClickListener(v -> submitAnswer());
+        btnSendAnswer.setEnabled(false);          // chỉ cho gửi sau khi xác nhận câu hỏi còn hiển thị
 
+        if (question != null) displayQuestionInfo();   // hiển thị tạm bản truyền sang
+        loadQuestion();
         loadAnswers();
     }
 
@@ -102,19 +120,45 @@ public class QuestionDetailActivity extends AppCompatActivity {
         btnSendAnswer = findViewById(R.id.btnSendAnswer);
     }
 
+    /** Tải câu hỏi mới nhất từ Firestore; đóng màn hình nếu đã bị xóa hoặc bị ẩn. */
+    private void loadQuestion() {
+        questionService.getQuestionDetail(questionId)
+                .addOnSuccessListener(loaded -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    if (loaded == null) {      // không tồn tại hoặc không còn VISIBLE
+                        Toast.makeText(this, "Câu hỏi không còn tồn tại", Toast.LENGTH_SHORT).show();
+                        finish();
+                        return;
+                    }
+                    question = loaded;
+                    displayQuestionInfo();
+                    btnSendAnswer.setEnabled(true);
+                })
+                .addOnFailureListener(e -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    Toast.makeText(this, "Lỗi tải câu hỏi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+    }
+
     private void displayQuestionInfo() {
-        tvQuestionCategory.setText(question.getCategory() != null ? question.getCategory() : "Khác");
+        // category = tên ngành (CreateQuestionActivity/dữ liệu mẫu đều có); majorId chỉ là dự phòng
+        String major = question.getCategory() != null && !question.getCategory().isEmpty()
+                ? question.getCategory() : question.getMajorId();
+        tvQuestionCategory.setText(major != null && !major.isEmpty() ? major : "Khác");
         tvQuestionTitle.setText(question.getTitle());
         tvQuestionContent.setText(question.getContent());
 
-        String author = question.getUserName() != null && !question.getUserName().isEmpty() ? question.getUserName() : "Thành viên";
+        String name = question.getUserName();
+        String author = name != null && !name.isEmpty() ? name : "Thành viên";
         tvQuestionAuthorName.setText(author);
-        if (!author.isEmpty()) {
-            tvQuestionAvatar.setText(author.substring(0, 1).toUpperCase());
-        }
+        tvQuestionAvatar.setText(author.substring(0, 1).toUpperCase());
 
+        // createdAt là long (mili giây); 0 nghĩa là chưa có dữ liệu
+        long createdMillis = question.getCreatedAt() > 0
+                ? question.getCreatedAt()
+                : System.currentTimeMillis();
         CharSequence relativeTime = DateUtils.getRelativeTimeSpanString(
-                question.getCreatedAt(),
+                createdMillis,
                 System.currentTimeMillis(),
                 DateUtils.MINUTE_IN_MILLIS,
                 DateUtils.FORMAT_ABBREV_RELATIVE
@@ -153,7 +197,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         pbAnswersLoading.setVisibility(View.VISIBLE);
         tvEmptyAnswers.setVisibility(View.GONE);
 
-        answerRepository.getAnswersByQuestionId(question.getId(), new AnswerRepository.Callback<List<Answer>>() {
+        answerRepository.getAnswersByQuestionId(questionId, new AnswerRepository.Callback<List<Answer>>() {
             @Override
             public void onSuccess(List<Answer> list) {
                 pbAnswersLoading.setVisibility(View.GONE);
@@ -175,6 +219,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void submitAnswer() {
+        if (question == null) return;             // chưa tải xong câu hỏi
         String content = etAnswerInput.getText().toString().trim();
         if (content.isEmpty()) {
             Toast.makeText(this, "Vui lòng nhập nội dung câu trả lời", Toast.LENGTH_SHORT).show();
@@ -184,7 +229,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         btnSendAnswer.setEnabled(false);
 
         answerService.createAnswer(
-                question.getId(),
+                questionId,
                 currentUser.getId(),
                 currentUser.getDisplayName(),
                 currentUser.getAvatarUrl(),
@@ -195,6 +240,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
                         btnSendAnswer.setEnabled(true);
                         etAnswerInput.setText("");
                         Toast.makeText(QuestionDetailActivity.this, "Đã gửi câu trả lời", Toast.LENGTH_SHORT).show();
+                        // Báo cho chủ câu hỏi (bỏ qua nếu tự trả lời câu hỏi của mình)
+                        notificationService.createNotification(
+                                question.getUserId(), currentUser.getId(),
+                                Notification.TYPE_NEW_ANSWER, questionId, Like.TYPE_QUESTION);
                         loadAnswers();
                     }
 
