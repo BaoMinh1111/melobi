@@ -33,7 +33,7 @@ public class AnswerRepository {
         this.db = FirebaseFirestore.getInstance();
     }
 
-    // Xem danh sách câu trả lời theo questionId, sắp xếp theo lượt thích giảm dần
+    // Xem danh sách câu trả lời theo questionId, sắp xếp theo lượt thích giảm dần, lọc bỏ câu trả lời đã ẩn
     public void getAnswersByQuestionId(String questionId, Callback<List<Answer>> callback) {
         db.collection(COLLECTION_ANSWERS)
                 .whereEqualTo("questionId", questionId)
@@ -43,6 +43,9 @@ public class AnswerRepository {
                     for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                         Answer answer = doc.toObject(Answer.class);
                         if (answer != null) {
+                            if (answer.isHidden()) {
+                                continue; // Không hiển thị câu trả lời đã bị ẩn
+                            }
                             if (answer.getId() == null || answer.getId().isEmpty()) {
                                 answer.setId(doc.getId());
                             }
@@ -77,6 +80,7 @@ public class AnswerRepository {
         answer.setUpdatedAt(currentTime);
         answer.setLikes(0);
         answer.setCommentCount(0);
+        answer.setStatus(Answer.STATUS_ACTIVE);
         if (answer.getLikedUserIds() == null) {
             answer.setLikedUserIds(new ArrayList<>());
         }
