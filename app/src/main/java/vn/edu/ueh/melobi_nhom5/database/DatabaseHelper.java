@@ -120,7 +120,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     /* Hàm xử lý khi nâng cấp phiên bản Database */
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Giả sử Upgrade từ Version 1 (bảng cũ) lên Version 2 (bảng mới)
+        // Upgrade từ Version 1 (bảng cũ) lên Version 2 (bảng mới)
         if (oldVersion < 2) {
             try {
                 // Sử dụng ALTER TABLE để thêm cột vào bảng cũ mà KHÔNG làm mất dữ liệu hiện tại
