@@ -52,3 +52,11 @@ public class UserSuggestionService {
         return result;
     }
 }
+/*Đây là 1 lớp ko có trong file doc, 1 số lỗi sau:
+Lớp chỉ lọc danh sách có sẵn. Để dùng thật, ai đó phải tải toàn bộ collection users từ Firestore về máy rồi truyền vào. 
+Cách này không ổn khi người dùng nhiều (tốn mạng, tốn RAM, tốn lượt đọc Firestore). Nên để Firestore làm việc lọc và sắp xếp
+* Tham số currentUserId: Gợi ý cả chính người đang đăng nhập (“gợi ý follow chính mình”)
+* Loại những người đã follow: Người dùng thấy gợi ý người mình đã follow rồi.
+* Loại tài khoản bị khóa (status = LOCKED): Gợi ý tài khoản không đăng nhập được
+* Loại tài khoản Admin: Admin xuất hiện trong gợi ý
+* Giới hạn số lượng (limit)	: Trả về toàn bộ người cùng chuyên ngành*/
