@@ -61,3 +61,10 @@ public class ModerationService {
         // TODO: Cập nhật status của User thành "ACTIVE"
     }
 }
+/*lỗi trong submitReport:
+* Không chặn báo cáo trùng và tự báo cáo mình. Mỗi lần bấm gửi tạo thêm một document (ID là UUID ngẫu nhiên), nên một người báo cáo cùng một bài 50 lần 
+sẽ ra 50 báo cáo. Đặt ID theo reporterId_targetType_targetId để mỗi người chỉ báo cáo một nội dung một lần, và chặn trường hợp người dùng báo cáo chính mình 
+(reporterId.equals(targetId) khi targetType = USER).
+* Gửi lại báo cáo sẽ ghi đè báo cáo đã xử lý. Nếu dùng ID cố định mà gọi set(), báo cáo đã RESOLVED sẽ bị đặt lại PENDING. Cần kiểm tra trước 
+(trong transaction) rằng document chưa tồn tại.
+* Không kiểm tra đầu vào. reason rỗng, targetType ngoài {QUESTION, ANSWER, USER}, hoặc reporterId null đều được ghi thẳng lên Firestore.*/
