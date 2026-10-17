@@ -396,3 +396,16 @@ public class QuestionDetailActivity extends AppCompatActivity {
         tvQuestionLikeCount.setTextColor(color);
     }
 }
+/*1 số lỗi:
+* Like câu trả lời đi thẳng vào AnswerRepository.toggleLike(), không qua AnswerService.
+* ctivity tự tạo thông báo sau khi gọi Service/Repository thành công. Hậu quả: màn hình khác tạo câu trả lời hoặc like thì không có thông báo, 
+và logic nằm rải rác. Ngoài ra Activity gọi AnswerRepository trực tiếp ở bốn chỗ (tải danh sách, like, sửa, xóa), bỏ qua AnswerService
+* question.setLikeCount(Math.max(0, question.getLikeCount() + delta)). delta là long, nên kết quả của Math.max là long. Nếu setLikeCount nhận int 
+(như Question của B) thì dòng này không biên dịch. Khai báo int delta hoặc ép kiểu cho khớp.
+* AuthHelper.getCurrentUser() trả về người dùng giả khi chưa đăng nhập.
+* Nút gửi bị khóa vĩnh viễn nếu tải câu hỏi lỗi. btnSendAnswer chỉ được bật khi loadQuestion thành công. Khi mất mạng, màn hình hiện thông báo lỗi nhưng không có 
+nút thử lại, và dữ liệu hiển thị tạm từ EXTRA_QUESTION không giúp gửi được
+* loadLikeState không có addOnFailureListener. Nếu lỗi, questionLiked giữ giá trị false dù người dùng đã like. Nút vẫn bấm được nên người dùng có thể “like” lại, 
+và lần này changed = false nên số đếm không thay đổi
+* Vòng đời không đồng đều. Callback của câu hỏi có kiểm tra isFinishing(), nhưng callback của loadAnswers, toggleLike, sửa, xóa và submitAnswer thì không. 
+Thoát màn hình giữa chừng rồi Toast/cập nhật giao diện có thể gây lỗi hoặc cập nhật vào view đã hủy. Dùng chung một hàm kiểm tra cho tất cả.*/
