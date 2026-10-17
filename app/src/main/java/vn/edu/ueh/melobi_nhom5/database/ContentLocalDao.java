@@ -295,4 +295,9 @@ public class ContentLocalDao {
         return list;
     }
 }
-
+ /*1 số lỗi sau:
+ * ghi đè status của Answer bằng trạng thái đồng bộ. Trong parseAnswerListFromCursor: Dòng thứ hai gọi lại setStatus, nên mọi Answer đọc ra đều có 
+ status = "SYNCED" thay vì VISIBLE/HIDDEN. Câu hỏi thì dùng setSyncStatus đúng, Answer thì nhầm tên hàm. Sửa thành a.setSyncStatus(...) (Answer cần có trường này)
+ * dữ liệu từ Firebase ghi đè thay đổi chưa đồng bộ. saveQuestionsList và saveAnswers gọi saveQuestion(q, SYNCED), mà saveQuestion luôn update theo ID. 
+ Nếu người dùng vừa sửa câu hỏi lúc offline (PENDING_UPDATE), lần kéo dữ liệu kế tiếp từ Firebase sẽ ghi đè nội dung và đặt lại trạng thái SYNCED. 
+ Thay đổi offline mất vĩnh viễn, và getPendingQuestions không còn thấy nó để đẩy lên.*/
