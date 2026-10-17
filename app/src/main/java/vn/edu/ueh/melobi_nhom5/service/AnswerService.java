@@ -259,3 +259,9 @@ public class AnswerService {
                 });
     }
 }
+/*1 số lỗi sau:
+* Hai bản cài đặt like cùng tồn tại. AnswerRepository.toggleLike() (chỉ cập nhật likes) và AnswerService.likeAnswer()/unlikeAnswer() (cập nhật cả hai). 
+Giao diện gọi bản nào thì bản kia không được cập nhật. Giữ một bản trong service, xóa hoặc đổi bản còn lại.
+* Thứ tự xếp hạng khi bằng like không khớp. Thiết kế và ContentLocalDao ghi: bằng like thì câu cũ hơn lên trước (createdAt tăng dần). 
+Nhưng AnswerRepository.getAnswersByQuestionId sắp xếp bằng Long.compare(a2.getCreatedAt(), a1.getCreatedAt()). Nên chú ý
+* Thiết kế có entity Like (đa hình, ID userId_targetType_targetId) và Nghi đã làm likeQuestion đúng kiểu đó. Còn like của Answer lại lưu bằng mảng likedUserIds */
