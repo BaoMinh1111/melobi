@@ -4,7 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-
+import vn.edu.ueh.melobi_nhom5.entity.Answer;
 import vn.edu.ueh.melobi_nhom5.entity.Question;
 
 import java.util.ArrayList;
@@ -76,6 +76,22 @@ public class ContentLocalDao {
        return parseQuestionListFromCursor(cursor);
    }
 
+   // Lấy chi tiết một câu hỏi dựa vào ID (Dùng khi người dùng click vào xem chi tiết lúc Offline)
+   public Question getQuestionById(String questionId) {
+       SQLiteDatabase db = dbHelper.getReadableDatabase();
+       String query = "SELECT * FROM " + DatabaseHelper.TABLE_QUESTION
+               + " WHERE " + DatabaseHelper.COL_Q_ID + " = ?";
+
+       Cursor cursor = db.rawQuery(query, new String[]{questionId});
+       List<Question> result = parseQuestionListFromCursor(cursor);
+
+       // Nếu danh sách trả về có dữ liệu, lấy phần tử đầu tiên. Nếu không thì trả về null.
+       if (result != null && !result.isEmpty()) {
+           return result.get(0);
+       }
+       return null;
+   }
+
    // Đánh dấu câu hỏi đã đồng bộ thành công lên FireBase
    public void markAsSynced(String questionId) {
        SQLiteDatabase db = dbHelper.getWritableDatabase();
@@ -122,7 +138,96 @@ public class ContentLocalDao {
        return parseQuestionListFromCursor(cursor);
    }
 
-   /* Hàm tiện ích (Helper Method) -> Tránh lặp lại code */
+   /* Quản lý câu trả lời */
+    // Thuật toán Upsert -> Lưu 1 câu trả lời
+   public void saveAnswer(Answer a, String syncStatus) {
+       SQLiteDatabase db = dbHelper.getWritableDatabase();
+       ContentValues values = new ContentValues();
+
+       // Đã sử dụng các Getter chuẩn hóa của lớp Answer
+       values.put(DatabaseHelper.COL_A_ID, a.getAnswerId());
+       values.put(DatabaseHelper.COL_A_QUESTION_ID, a.getQuestionId());
+       values.put(DatabaseHelper.COL_A_USER_ID, a.getUserId());
+       values.put(DatabaseHelper.COL_A_CONTENT, a.getContent());
+       values.put(DatabaseHelper.COL_A_STATUS, a.getStatus());
+       values.put(DatabaseHelper.COL_A_LIKE_COUNT, a.getLikeCount());
+       values.put(DatabaseHelper.COL_A_COMMENT_COUNT, a.getCommentCount());
+       values.put(DatabaseHelper.COL_A_CREATED_AT, a.getCreatedAt());
+
+       // Cột hiển thị và đồng bộ
+       values.put(DatabaseHelper.COL_A_SYNC_STATUS, syncStatus);
+       values.put(DatabaseHelper.COL_A_AUTHOR_NAME, a.getAuthorName());
+       values.put(DatabaseHelper.COL_A_AUTHOR_AVATAR, a.getAuthorAvatarUrl());
+
+       // Upsert: Thử Cập nhật trước
+       int rows = db.update(DatabaseHelper.TABLE_ANSWER, values,
+               DatabaseHelper.COL_A_ID + " = ?", new String[]{a.getAnswerId()});
+
+       // Nếu cập nhật = 0 dòng -> Thêm mới
+       if (rows == 0) {
+           db.insert(DatabaseHelper.TABLE_ANSWER, null, values);
+       }
+   }
+
+   // Lưu danh sách câu trả lời từ FireBase (Dùng Transaction tối ưu tốc độ)
+   public void saveAnswers(List<Answer> answerList) {
+       if (answerList == null || answerList.isEmpty()) return;
+
+       SQLiteDatabase db = dbHelper.getWritableDatabase();
+       db.beginTransaction();
+       try {
+           for (Answer a : answerList) {
+               saveAnswer(a, DatabaseHelper.SYNC_STATUS_SYNCED);
+           }
+           db.setTransactionSuccessful();
+       } finally {
+           db.endTransaction();
+       }
+   }
+
+   // Lấy danh sách câu trả lời của 1 câu hỏi cụ thể
+    //Logic: Bỏ qua bài bị ẩn, sắp xếp theo Like giảm dần, Thời gian tăng dần
+   public List<Answer> getAnswersByQuestion(String questionId) {
+       SQLiteDatabase db = dbHelper.getReadableDatabase();
+       String query = "SELECT * FROM " + DatabaseHelper.TABLE_ANSWER
+               + " WHERE " + DatabaseHelper.COL_A_QUESTION_ID + " = ? AND " + DatabaseHelper.COL_A_STATUS + " != 'HIDDEN'"
+               + " ORDER BY " + DatabaseHelper.COL_A_LIKE_COUNT + " DESC, "
+               + DatabaseHelper.COL_A_CREATED_AT + " ASC";
+
+       Cursor cursor = db.rawQuery(query, new String[]{questionId});
+       return parseAnswerListFromCursor(cursor);
+   }
+
+   /* Dọn dẹp bộ nhớ cache */
+    // Xóa dữ liệu cũ (>= 7 ngày) và đã đồng bộ (SYNCED)
+   public void clearOldCache() {
+       SQLiteDatabase db = dbHelper.getWritableDatabase();
+
+       // Tính toán mốc thời gian của 7 ngày trước (tính bằng mili-giây)
+       long sevenDaysInMillis = 7L * 24 * 60 * 60 * 1000;
+       long cutoffTime = System.currentTimeMillis() - sevenDaysInMillis;
+
+       // Chỉ xóa những dòng có syncStatus = 'SYNCED' (đã an toàn trên mây) VÀ thời gian tạo cũ hơn 7 ngày
+       String whereClause = DatabaseHelper.COL_Q_SYNC_STATUS + " = ? AND " + DatabaseHelper.COL_Q_CREATED_AT + " < ?";
+       String[] whereArgs = new String[]{DatabaseHelper.SYNC_STATUS_SYNCED, String.valueOf(cutoffTime)};
+
+       db.beginTransaction();
+       try {
+           // Xóa ở bảng Question
+           db.delete(DatabaseHelper.TABLE_QUESTION, whereClause, whereArgs);
+
+           // Xóa ở bảng Answer (Tái sử dụng chung whereArgs vì logic thời gian và đồng bộ giống nhau)
+           db.delete(DatabaseHelper.TABLE_ANSWER,
+                   DatabaseHelper.COL_A_SYNC_STATUS + " = ? AND " + DatabaseHelper.COL_A_CREATED_AT + " < ?",
+                   whereArgs);
+
+           db.setTransactionSuccessful();
+       } finally {
+           db.endTransaction();
+       }
+   }
+
+   /* Hàm tiện ích cho Question (Helper Method) -> Tránh lặp lại code */
    private List<Question> parseQuestionListFromCursor(Cursor cursor) {
        List<Question> list = new ArrayList<>();
        try {
@@ -156,5 +261,38 @@ public class ContentLocalDao {
        }
        return list;
    }
+
+    /* Hàm tiện ích cho Question (Helper Method) -> Tránh lặp lại code */
+    private List<Answer> parseAnswerListFromCursor(Cursor cursor) {
+        List<Answer> list = new ArrayList<>();
+        try {
+            if (cursor.moveToFirst()) {
+                do {
+                    Answer a = new Answer();
+                    // Đã sử dụng các Setter chuẩn hóa
+                    a.setAnswerId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_ID)));
+                    a.setQuestionId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_QUESTION_ID)));
+                    a.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_USER_ID)));
+                    a.setContent(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_CONTENT)));
+                    a.setStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_STATUS)));
+                    a.setLikeCount(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_LIKE_COUNT)));
+                    a.setCommentCount(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_COMMENT_COUNT)));
+                    a.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_CREATED_AT)));
+
+                    // Lấy thêm cột đồng bộ
+                    a.setSyncStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_SYNC_STATUS)));
+                    a.setAuthorName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_NAME)));
+                    a.setAuthorAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_AVATAR)));
+
+                    list.add(a);
+                } while (cursor.moveToNext());
+            }
+        } finally {
+            if (cursor != null && !cursor.isClosed()) {
+                cursor.close();
+            }
+        }
+        return list;
+    }
 }
 
