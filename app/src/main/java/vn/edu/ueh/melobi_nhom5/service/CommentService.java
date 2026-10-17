@@ -148,3 +148,6 @@ public class CommentService {
         });
     }
 }
+/*1 số lỗi sau:
+* CommentBottomSheetDialogFragment gọi thẳng commentRepository.addComment(...) và commentRepository.deleteComment(...), không đi qua CommentService
+* public void deleteComment(Comment comment, Callback<Void> callback): Hàm này ai cx gọi đc*/
