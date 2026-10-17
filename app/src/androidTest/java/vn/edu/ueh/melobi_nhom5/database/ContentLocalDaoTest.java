@@ -112,3 +112,10 @@ public class ContentLocalDaoTest {
         assertNotNull("Câu hỏi cũ CHƯA ĐỒNG BỘ tuyệt đối không được xóa để tránh mất dữ liệu", localDao.getQuestionById("q_old_pending"));
     }
 }
+/*1 số lỗi sau:
+* setStatus("ACTIVE") sai giá trị. ACTIVE là trạng thái của User. Question dùng VISIBLE / HIDDEN. 
+Nếu getQuestions() lọc status = 'VISIBLE' thì câu hỏi trong test sẽ không hiện ra. Dùng hằng số Question.STATUS_VISIBLE.
+* Thứ tự trong setUp() có thể làm test chập chờn. Lớp đang deleteDatabase(...) trước, nhưng DatabaseHelper là singleton có thể còn giữ kết nối mở từ test khác 
+(ví dụ test của SyncManager). Khi đó ghi dữ liệu vào file đã bị xóa và test thấy dữ liệu cũ.
+* Test đang xóa dữ liệu thật của app. Instrumented test chạy chung thư mục dữ liệu với app đã cài, 
+nên deleteDatabase sẽ xóa luôn cache offline thật trên máy/emulator đó.*/
