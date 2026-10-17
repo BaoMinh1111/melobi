@@ -156,8 +156,8 @@ public class ContentLocalDao {
 
        // Cột hiển thị và đồng bộ
        values.put(DatabaseHelper.COL_A_SYNC_STATUS, syncStatus);
-       values.put(DatabaseHelper.COL_A_AUTHOR_NAME, a.getAuthorName());
-       values.put(DatabaseHelper.COL_A_AUTHOR_AVATAR, a.getAuthorAvatarUrl());
+       values.put(DatabaseHelper.COL_A_AUTHOR_NAME, a.getUserName());
+       values.put(DatabaseHelper.COL_A_AUTHOR_AVATAR, a.getUserAvatarUrl());
 
        // Upsert: Thử Cập nhật trước
        int rows = db.update(DatabaseHelper.TABLE_ANSWER, values,
@@ -280,9 +280,9 @@ public class ContentLocalDao {
                     a.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_CREATED_AT)));
 
                     // Lấy thêm cột đồng bộ
-                    a.setSyncStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_SYNC_STATUS)));
-                    a.setAuthorName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_NAME)));
-                    a.setAuthorAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_AVATAR)));
+                    a.setStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_SYNC_STATUS)));
+                    a.setUserName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_NAME)));
+                    a.setUserAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_AVATAR)));
 
                     list.add(a);
                 } while (cursor.moveToNext());
