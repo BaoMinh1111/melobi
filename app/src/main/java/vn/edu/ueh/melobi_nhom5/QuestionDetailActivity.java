@@ -9,6 +9,9 @@ import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Color;
+import android.widget.ImageView;
+import com.google.android.gms.tasks.Task;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -40,6 +43,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     public static final String EXTRA_QUESTION_ID = "extra_question_id";
     /** Có thể truyền cả đối tượng Question (model.Question) để hiển thị ngay trong lúc tải. */
     public static final String EXTRA_QUESTION = "extra_question";
+    public static final String TARGET_QUESTION = "QUESTION";
+    public static final String TARGET_ANSWER = "ANSWER";
+    public static final String TARGET_COMMENT = "COMMENT";
+    public static final String TARGET_USER = "USER";
 
     private String questionId;
     private Question question;               // có thể null cho tới khi tải xong
@@ -65,6 +72,11 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
     private EditText etAnswerInput;
     private ImageButton btnSendAnswer;
+    private View btnLikeQuestion;
+    private ImageView ivQuestionLike;
+    private TextView tvQuestionLikeCount;
+    private boolean questionLiked;
+    private boolean likeBusy;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -100,6 +112,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
         toolbarDetail.setNavigationOnClickListener(v -> finish());
         btnSendAnswer.setOnClickListener(v -> submitAnswer());
+        btnLikeQuestion.setOnClickListener(v -> onQuestionLikeClicked());
         btnSendAnswer.setEnabled(false);          // chỉ cho gửi sau khi xác nhận câu hỏi còn hiển thị
 
         if (question != null) displayQuestionInfo();   // hiển thị tạm bản truyền sang
@@ -123,6 +136,9 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
         etAnswerInput = findViewById(R.id.etAnswerInput);
         btnSendAnswer = findViewById(R.id.btnSendAnswer);
+        btnLikeQuestion = findViewById(R.id.btnLikeQuestion);
+        ivQuestionLike = findViewById(R.id.ivQuestionLike);
+        tvQuestionLikeCount = findViewById(R.id.tvQuestionLikeCount);
     }
 
     /** Tải câu hỏi mới nhất từ Firestore; đóng màn hình nếu đã bị xóa hoặc bị ẩn. */
@@ -138,6 +154,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
                     question = loaded;
                     displayQuestionInfo();
                     btnSendAnswer.setEnabled(true);
+                    loadLikeState();
                 })
                 .addOnFailureListener(e -> {
                     if (isFinishing() || isDestroyed()) return;
@@ -169,6 +186,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
                 DateUtils.FORMAT_ABBREV_RELATIVE
         );
         tvQuestionTime.setText(relativeTime);
+        applyLikeStyle();
     }
 
     private void setupRecyclerView() {
@@ -265,6 +283,12 @@ public class QuestionDetailActivity extends AppCompatActivity {
         answerRepository.toggleLike(answer.getId(), currentUser.getId(), new AnswerRepository.Callback<Answer>() {
             @Override
             public void onSuccess(Answer result) {
+                // result là Answer sau khi toggle, nên isLikedBy = true nghĩa là vừa like
+                if (result.isLikedBy(currentUser.getId())) {
+                    notificationService.createNotification(
+                            answer.getUserId(), currentUser.getId(),
+                            Notification.TYPE_LIKE, answer.getQuestionId(), Like.TYPE_QUESTION);
+                }
                 loadAnswers();
             }
 
@@ -332,5 +356,48 @@ public class QuestionDetailActivity extends AppCompatActivity {
         CommentBottomSheetDialogFragment bottomSheet = CommentBottomSheetDialogFragment.newInstance(answer.getId());
         bottomSheet.setOnCommentUpdatedListener(() -> loadAnswers());
         bottomSheet.show(getSupportFragmentManager(), "CommentBottomSheet");
+    }
+    private void loadLikeState() {
+        questionService.isQuestionLikedByUser(questionId, currentUser.getId())
+                .addOnSuccessListener(liked -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    questionLiked = Boolean.TRUE.equals(liked);
+                    applyLikeStyle();
+                    btnLikeQuestion.setEnabled(true);
+                });
+    }
+
+    private void onQuestionLikeClicked() {
+        if (question == null || likeBusy) return;
+        likeBusy = true;
+        final boolean wasLiked = questionLiked;
+
+        Task<Boolean> task = wasLiked
+                ? questionService.unlikeQuestion(questionId, currentUser.getId())
+                : questionService.likeQuestion(questionId, question.getUserId(), currentUser.getId());
+
+        task.addOnSuccessListener(changed -> {
+            likeBusy = false;
+            if (isFinishing() || isDestroyed()) return;
+            questionLiked = !wasLiked;
+            if (Boolean.TRUE.equals(changed)) {
+                long delta = wasLiked ? -1 : 1;
+                question.setLikeCount(Math.max(0, question.getLikeCount() + delta));
+            }
+            applyLikeStyle();
+        }).addOnFailureListener(e -> {
+            likeBusy = false;
+            if (isFinishing() || isDestroyed()) return;
+            Toast.makeText(this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void applyLikeStyle() {
+        long count = question != null ? question.getLikeCount() : 0;
+        tvQuestionLikeCount.setText(count + " Thích");
+        int color = Color.parseColor(questionLiked ? "#1A73E8" : "#5F6368");
+        ivQuestionLike.setImageResource(questionLiked ? R.drawable.ic_thumb_up_filled : R.drawable.ic_thumb_up);
+        ivQuestionLike.setColorFilter(color);
+        tvQuestionLikeCount.setTextColor(color);
     }
 }
