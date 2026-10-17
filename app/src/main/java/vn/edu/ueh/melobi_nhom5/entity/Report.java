@@ -47,3 +47,11 @@ public class Report {
     public void setCreatedAt(long createdAt) {this.createdAt = createdAt; }
 
 }
+/*1 số lỗi:
+* status = "PENDING..." (có 3 dấu chấm) 
+-> Ảnh hưởng đến ModerationService: getReports("PENDING") không tìm thấy báo cáo nào, vì giá trị lưu là "PENDING...". Admin luôn thấy danh sách rỗng
+* setReporterId(), setTargetId(), setTargetType(), setReason(), setStatus() không có tham số
+-> Ảnh hưởng đến ModerationService: Đọc Report từ Firestore (toObject) ra các trường này đều null
+* getReporterId(String reportId) có tham số thừa
+-> Ảnh hưởng đến ModerationService: Firestore không nhận đây là getter, nên reporterId không được ghi lên Firestore
+* Không có hằng số targetType, status*/
