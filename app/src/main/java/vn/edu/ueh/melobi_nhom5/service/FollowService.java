@@ -120,6 +120,79 @@ public class FollowService {
         return getFollowing(userId).size();
     }
 
+    // Theo doi cau hoi
+    public boolean followQuestion(String userId, String questionId) {
+        validateIds(userId, questionId);
+
+        if (isFollowingQuestion(userId, questionId)) {
+            return false;
+        }
+
+        Follow follow = new Follow(
+                UUID.randomUUID().toString(),
+                userId,
+                questionId,
+                "QUESTION",
+                new Date()
+        );
+
+        follows.add(follow);
+        return true;
+    }
+
+    // Huy theo doi cau hoi
+    public boolean unfollowQuestion(String userId, String questionId) {
+        validateIds(userId, questionId);
+
+        Iterator<Follow> iterator = follows.iterator();
+
+        while (iterator.hasNext()) {
+            Follow follow = iterator.next();
+
+            if ("QUESTION".equals(follow.getTargetType())
+                    && userId.equals(follow.getFollowerId())
+                    && questionId.equals(follow.getTargetId())) {
+
+                iterator.remove();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Kiem tra da theo doi cau hoi hay chua
+    public boolean isFollowingQuestion(String userId, String questionId) {
+        validateIds(userId, questionId);
+
+        for (Follow follow : follows) {
+            if ("QUESTION".equals(follow.getTargetType())
+                    && userId.equals(follow.getFollowerId())
+                    && questionId.equals(follow.getTargetId())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Lay danh sach ID cau hoi da theo doi
+    public List<String> getFollowedQuestions(String userId) {
+        validateUserId(userId);
+
+        List<String> result = new ArrayList<>();
+
+        for (Follow follow : follows) {
+            if ("QUESTION".equals(follow.getTargetType())
+                    && userId.equals(follow.getFollowerId())) {
+                result.add(follow.getTargetId());
+            }
+        }
+
+        return result;
+    }
+
+
     // Kiem tra ID hop le
     private void validateUserId(String userId) {
         if (userId == null || userId.isBlank()) {

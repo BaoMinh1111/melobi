@@ -67,4 +67,31 @@ public class FollowServiceTest {
         assertEquals(1, service.getFollowerCount("B"));
     }
 
+    @Test
+    public void testFollowQuestion() {
+        FollowService service = new FollowService();
+
+        assertTrue(service.followQuestion("U01", "Q01"));
+        assertTrue(service.followQuestion("U01", "Q02"));
+
+        // Khong follow trung
+        assertFalse(service.followQuestion("U01", "Q01"));
+
+        assertEquals(2,
+                service.getFollowedQuestions("U01").size());
+
+        // Khong anh huong den user following
+        assertEquals(0,
+                service.getFollowingCount("U01"));
+
+        // Huy theo doi
+        assertTrue(service.unfollowQuestion("U01", "Q01"));
+
+        assertEquals(1,
+                service.getFollowedQuestions("U01").size());
+
+        assertFalse(service.unfollowQuestion("U01", "Q01"));
+    }
+
+
 }
