@@ -41,17 +41,35 @@ public class RegisterActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (AuthHelper.isLoggedIn()) {
-            openMainAndFinish();
-            return;
-        }
-
         setContentView(R.layout.activity_register);
 
         userService = new UserService();
         initViews();
         loadMajors();
         setupActions();
+
+        if (AuthHelper.isLoggedIn()) {
+            String userId = AuthHelper.getCurrentUserId();
+            if (userId == null || userId.isEmpty()) {
+                return;
+            }
+            userService.getProfile(userId, new UserService.Callback<User>() {
+                @Override
+                public void onSuccess(User result) {
+                    if (result != null && User.STATUS_LOCKED.equalsIgnoreCase(result.getStatus())) {
+                        userService.logout();
+                        Toast.makeText(RegisterActivity.this, "Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    openMainAndFinish();
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    Toast.makeText(RegisterActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
     }
 
     private void initViews() {

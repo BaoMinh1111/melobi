@@ -38,9 +38,8 @@ public class LoginActivity extends AppCompatActivity {
             registerForActivityResult(
                     new ActivityResultContracts.StartActivityForResult(),
                     result -> {
-                        if (result.getData() == null) {
+                        if (result.getResultCode() != RESULT_OK || result.getData() == null) {
                             setLoading(false);
-                            Toast.makeText(this, "Không nhận được dữ liệu đăng nhập Google", Toast.LENGTH_SHORT).show();
                             return;
                         }
 
@@ -52,7 +51,7 @@ public class LoginActivity extends AppCompatActivity {
                                 @Override
                                 public void onSuccess(User resultUser) {
                                     Toast.makeText(LoginActivity.this, R.string.message_login_success, Toast.LENGTH_SHORT).show();
-                                    openMainAndFinish();
+                                    openHome(resultUser);
                                 }
 
                                 @Override
@@ -71,17 +70,15 @@ public class LoginActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if (AuthHelper.isLoggedIn()) {
-            openMainAndFinish();
-            return;
-        }
-
         setContentView(R.layout.activity_login);
 
         userService = new UserService();
         initViews();
         setupActions();
+
+        if (AuthHelper.isLoggedIn()) {
+            restoreSession();
+        }
     }
 
     private void initViews() {
@@ -115,7 +112,7 @@ public class LoginActivity extends AppCompatActivity {
             @Override
             public void onSuccess(User result) {
                 Toast.makeText(LoginActivity.this, R.string.message_login_success, Toast.LENGTH_SHORT).show();
-                openMainAndFinish();
+                openHome(result);
             }
 
             @Override
@@ -153,7 +150,37 @@ public class LoginActivity extends AppCompatActivity {
         tvOpenRegister.setEnabled(!isLoading);
     }
 
-    private void openMainAndFinish() {
+    private void restoreSession() {
+        String userId = AuthHelper.getCurrentUserId();
+        if (userId == null || userId.isEmpty()) {
+            return;
+        }
+
+        setLoading(true);
+        userService.getProfile(userId, new UserService.Callback<User>() {
+            @Override
+            public void onSuccess(User result) {
+                if (result != null && User.STATUS_LOCKED.equalsIgnoreCase(result.getStatus())) {
+                    userService.logout();
+                    setLoading(false);
+                    Toast.makeText(LoginActivity.this, "Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                openHome(result != null ? result : AuthHelper.getCurrentUser());
+            }
+
+            @Override
+            public void onError(Exception e) {
+                setLoading(false);
+                Toast.makeText(LoginActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void openHome(User user) {
+        if (user != null && user.isAdmin()) {
+            Toast.makeText(this, R.string.message_admin_signed_in, Toast.LENGTH_SHORT).show();
+        }
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);

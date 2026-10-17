@@ -49,4 +49,7 @@
     <string name="label_following_count">Đang theo dõi</string>
     <string name="hint_avatar_status">Chưa có ảnh đại diện</string>
     <string name="google_web_client_id"></string>
+    <string name="action_admin">Quản trị</string>
+    <string name="message_admin_signed_in">Đăng nhập với quyền quản trị</string>
+    <string name="error_admin_forbidden">Bạn không có quyền truy cập trang quản trị</string>
 </resources>

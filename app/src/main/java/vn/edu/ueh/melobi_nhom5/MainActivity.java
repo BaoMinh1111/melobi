@@ -85,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
         setupRecyclerView();
         setupCategoryChips();
         SampleDataInitializer.initializeSampleMajors(null);
+        loadCurrentProfile();
 
         loadQuestions();
     }
@@ -94,14 +95,26 @@ public class MainActivity extends AppCompatActivity {
         rvQuestions = findViewById(R.id.rvQuestions);
         pbMainLoading = findViewById(R.id.pbMainLoading);
         tvMainEmpty = findViewById(R.id.tvMainEmpty);
+        View fabAskQuestion = findViewById(R.id.fabAskQuestion);
+        if (fabAskQuestion != null) {
+            fabAskQuestion.setOnClickListener(v ->
+                    startActivity(new Intent(MainActivity.this, CreateQuestionActivity.class)));
+        }
     }
 
     private void setupToolbar() {
         toolbarMain.setSubtitle(currentUser.getDisplayName());
+        applyAdminMenuVisibility();
         toolbarMain.setOnMenuItemClickListener(item -> {
             int itemId = item.getItemId();
-            if (itemId == R.id.action_init_sample_data) {
-                initSampleData();
+            if (itemId == R.id.action_init_sample_data || itemId == R.id.action_admin) {
+                if (!isCurrentUserAdmin()) {
+                    Toast.makeText(this, R.string.error_admin_forbidden, Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                if (itemId == R.id.action_init_sample_data) {
+                    initSampleData();
+                }
                 return true;
             }
             if (itemId == R.id.action_profile) {
@@ -115,6 +128,44 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
+    }
+
+    private void loadCurrentProfile() {
+        String userId = currentUser.getUserId();
+        userService.getProfile(userId, new UserService.Callback<User>() {
+            @Override
+            public void onSuccess(User result) {
+                if (result != null && User.STATUS_LOCKED.equalsIgnoreCase(result.getStatus())) {
+                    userService.logout();
+                    Toast.makeText(MainActivity.this, "Tài khoản này đã bị khóa. Vui lòng liên hệ quản trị viên.", Toast.LENGTH_SHORT).show();
+                    navigateToLogin();
+                    return;
+                }
+                if (result != null) {
+                    currentUser = result;
+                    toolbarMain.setSubtitle(currentUser.getDisplayName());
+                }
+                applyAdminMenuVisibility();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                Log.e(TAG, "Lỗi tải hồ sơ: ", e);
+            }
+        });
+    }
+
+    private void applyAdminMenuVisibility() {
+        if (toolbarMain.getMenu().findItem(R.id.action_admin) != null) {
+            toolbarMain.getMenu().findItem(R.id.action_admin).setVisible(isCurrentUserAdmin());
+        }
+        if (toolbarMain.getMenu().findItem(R.id.action_init_sample_data) != null) {
+            toolbarMain.getMenu().findItem(R.id.action_init_sample_data).setVisible(isCurrentUserAdmin());
+        }
+    }
+
+    private boolean isCurrentUserAdmin() {
+        return currentUser != null && currentUser.isAdmin();
     }
 
     private void setupRecyclerView() {
@@ -226,6 +277,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (rvQuestions == null || questionAdapter == null) {
+            return;
+        }
         // Refresh question answerCount when returning from detail screen
         loadQuestions();
     }

@@ -9,5 +9,6 @@ public class MelobiApplication extends Application {
     public void onCreate() {
         super.onCreate();
         NetworkUtils.initialize(this);
+        NetworkUtils.registerNetworkListener();
     }
 }

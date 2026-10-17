@@ -9,6 +9,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 
 public class AuthHelper {
     private static final String TAG = "AuthHelper";
+    private static User cachedUser;
 
     private AuthHelper() {
     }
@@ -17,11 +18,20 @@ public class AuthHelper {
         return FirebaseAuth.getInstance().getCurrentUser() != null;
     }
 
+    public static void setCurrentUser(User user) {
+        cachedUser = user;
+    }
+
     public static User getCurrentUser() {
         FirebaseUser fbUser = FirebaseAuth.getInstance().getCurrentUser();
         if (fbUser == null) {
             Log.d(TAG, "Chưa có người dùng đăng nhập");
+            cachedUser = null;
             return null;
+        }
+
+        if (cachedUser != null && fbUser.getUid().equals(cachedUser.getUserId())) {
+            return cachedUser;
         }
 
         String name = fbUser.getDisplayName() != null && !fbUser.getDisplayName().trim().isEmpty()
@@ -32,6 +42,7 @@ public class AuthHelper {
 
         User user = new User(fbUser.getUid(), name, email, avatar, "it");
         user.setStatus(User.STATUS_ACTIVE);
+        user.setRole(User.ROLE_USER);
         return user;
     }
 
@@ -41,6 +52,7 @@ public class AuthHelper {
     }
 
     public static void signOut() {
+        cachedUser = null;
         FirebaseAuth.getInstance().signOut();
     }
 }

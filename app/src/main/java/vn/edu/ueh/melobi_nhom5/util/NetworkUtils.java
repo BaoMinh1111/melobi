@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities;
 
 public final class NetworkUtils {
     private static Context appContext;
+    private static NetworkCallback registeredCallback;
 
     private NetworkUtils() {
     }
@@ -16,6 +17,15 @@ public final class NetworkUtils {
         if (context != null) {
             appContext = context.getApplicationContext();
         }
+    }
+
+    /**
+     * Đăng ký lắng nghe mạng theo tài liệu: khi có mạng trở lại thì kích hoạt đồng bộ.
+     */
+    public static NetworkCallback registerNetworkListener() {
+        return registerNetworkListener(() -> {
+            // SyncManager.syncAll() sẽ được gọi tại đây khi lớp đó đã có trong project.
+        });
     }
 
     public static boolean isOnline() {
@@ -68,6 +78,15 @@ public final class NetworkUtils {
             return null;
         }
 
+        if (registeredCallback != null) {
+            try {
+                connectivityManager.unregisterNetworkCallback(registeredCallback);
+            } catch (Exception ignored) {
+                // Callback cũ có thể đã bị hủy.
+            }
+            registeredCallback = null;
+        }
+
         NetworkCallback callback = new NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
@@ -77,6 +96,7 @@ public final class NetworkUtils {
             }
         };
         connectivityManager.registerDefaultNetworkCallback(callback);
+        registeredCallback = callback;
         return callback;
     }
 }

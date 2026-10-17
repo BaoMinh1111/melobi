@@ -24,6 +24,7 @@ import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.User;
+import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
 
 public class UserService {
@@ -186,7 +187,7 @@ public class UserService {
         } catch (Exception ignored) {
             // Không chặn đăng xuất Firebase nếu GoogleSignIn client không khả dụng.
         }
-        auth.signOut();
+        AuthHelper.signOut();
     }
 
     public void getProfile(String userId, Callback<User> callback) {
@@ -210,6 +211,7 @@ public class UserService {
                     if (user != null && TextUtils.isEmpty(user.getUserId())) {
                         user.setUserId(documentSnapshot.getId());
                     }
+                    cacheIfCurrentUser(user);
                     if (callback != null) {
                         callback.onSuccess(user);
                     }
@@ -392,11 +394,19 @@ public class UserService {
                 .document(user.getUserId())
                 .set(user, SetOptions.merge())
                 .addOnSuccessListener(unused -> {
+                    cacheIfCurrentUser(user);
                     if (callback != null) {
                         callback.onSuccess(user);
                     }
                 })
                 .addOnFailureListener(e -> notifyError(callback, e));
+    }
+
+    private void cacheIfCurrentUser(User user) {
+        FirebaseUser firebaseUser = auth.getCurrentUser();
+        if (user != null && firebaseUser != null && firebaseUser.getUid().equals(user.getUserId())) {
+            AuthHelper.setCurrentUser(user);
+        }
     }
 
     private void updateUserStatus(String userId, String status, Callback<Void> callback) {
