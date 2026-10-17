@@ -120,6 +120,33 @@
                     android:textColor="#3C4043"
                     android:textSize="14sp"
                     tools:text="Em đang bắt đầu học phát triển ứng dụng di động, các anh chị cho em xin lời khuyên nên học Java trước hay vào thẳng Kotlin luôn ạ?" />
+                <LinearLayout
+                    android:id="@+id/btnLikeQuestion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:enabled="false"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="4dp">
+
+                    <ImageView
+                        android:id="@+id/ivQuestionLike"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:contentDescription="Thích câu hỏi"
+                        android:src="@drawable/ic_thumb_up" />
+
+                    <TextView
+                        android:id="@+id/tvQuestionLikeCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:textColor="#5F6368"
+                        android:textSize="13sp"
+                        tools:text="0 Thích" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -217,8 +244,8 @@
 
         <ImageButton
             android:id="@+id/btnSendAnswer"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_avatar_circle"
             android:contentDescription="@string/desc_send"
