@@ -4,9 +4,16 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.MenuItem;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -21,6 +28,8 @@ import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +40,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
+import vn.edu.ueh.melobi_nhom5.service.NotificationService;
 
 /**
  * Feed câu hỏi: tải theo trang (QuestionService.getQuestions / filterByCategory),
@@ -41,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int PAGE_SIZE = 10;
     private static final String CATEGORY_ALL = "Tất cả";
-
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
     private User currentUser;
     private QuestionService questionService;
     private QuestionAdapter questionAdapter;
@@ -50,6 +60,12 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar pbMainLoading;     // tải trang đầu
     private ProgressBar pbLoadMore;        // tải các trang sau
     private TextView tvMainEmpty;
+    private NotificationService notificationService;
+    private TextView tvNotifBadge;
+    private EditText etSearch;
+    private String currentKeyword = "";
+    private Runnable searchRunnable;
+
 
     // ---- trạng thái phân trang ----
     private String currentCategory = CATEGORY_ALL;
@@ -83,17 +99,23 @@ public class MainActivity extends AppCompatActivity {
 
         currentUser = AuthHelper.getCurrentUser();
         questionService = new QuestionService();
+        notificationService = new NotificationService();
 
         initViews();
         setupRecyclerView();
         setupCategoryChips();
+        setupSearch();
+        setupNotificationBell();
 
         findViewById(R.id.fabAskQuestion).setOnClickListener(v -> {
             needsRefresh = true;
             startActivity(new Intent(this, CreateQuestionActivity.class));
         });
 
-        AuthHelper.ensureAuth(this::loadFirstPage);
+        AuthHelper.ensureAuth(() -> {
+            loadFirstPage();
+            refreshNotificationBadge();
+        });
     }
 
     private void initViews() {
@@ -142,6 +164,10 @@ public class MainActivity extends AppCompatActivity {
             String category = categoryOf(checkedId);
             if (category.equals(currentCategory)) return;
             currentCategory = category;
+            if (!currentKeyword.isEmpty()) {
+                currentKeyword = "";
+                etSearch.setText("");   // watcher thấy rỗng == currentKeyword nên không tải lại hai lần
+            }
             loadFirstPage();
         });
     }
@@ -191,9 +217,14 @@ public class MainActivity extends AppCompatActivity {
         final int token = loadToken;
         (isFirstPage ? pbMainLoading : pbLoadMore).setVisibility(View.VISIBLE);
 
-        Task<QuerySnapshot> task = CATEGORY_ALL.equals(currentCategory)
-                ? questionService.getQuestions(lastVisible, PAGE_SIZE)
-                : questionService.filterByCategory(currentCategory, lastVisible, PAGE_SIZE);
+        Task<QuerySnapshot> task;
+        if (!currentKeyword.isEmpty()) {
+            task = questionService.searchQuestions(currentKeyword, lastVisible, PAGE_SIZE);
+        } else if (CATEGORY_ALL.equals(currentCategory)) {
+            task = questionService.getQuestions(lastVisible, PAGE_SIZE);
+        } else {
+            task = questionService.filterByCategory(currentCategory, lastVisible, PAGE_SIZE);
+        }
 
         task.addOnSuccessListener(snapshot -> {
             if (token != loadToken || isFinishing() || isDestroyed()) return;   // kết quả của bộ lọc cũ
@@ -218,7 +249,8 @@ public class MainActivity extends AppCompatActivity {
             loadedCount += page.size();
 
             // Chưa có dữ liệu nào ở feed "Tất cả" -> nạp dữ liệu mẫu (chỉ thử một lần)
-            if (loadedCount == 0 && CATEGORY_ALL.equals(currentCategory) && !sampleInitTried) {
+            if (loadedCount == 0 && CATEGORY_ALL.equals(currentCategory)
+                    && currentKeyword.isEmpty() && !sampleInitTried)  {
                 sampleInitTried = true;
                 initSampleData();
                 return;
@@ -270,5 +302,58 @@ public class MainActivity extends AppCompatActivity {
             needsRefresh = false;
             loadFirstPage();
         }
+        refreshNotificationBadge();
+    }
+    private void setupNotificationBell() {
+        MaterialToolbar toolbar = findViewById(R.id.toolbarMain);
+        MenuItem item = toolbar.getMenu().findItem(R.id.action_notifications);
+        if (item == null || item.getActionView() == null) return;
+        View bell = item.getActionView();
+        tvNotifBadge = bell.findViewById(R.id.tvNotifBadge);
+        bell.setOnClickListener(v -> startActivity(new Intent(this, NotificationActivity.class)));
+    }
+
+    private void refreshNotificationBadge() {
+        if (tvNotifBadge == null || FirebaseAuth.getInstance().getCurrentUser() == null) return;
+        notificationService.getUnreadCount(AuthHelper.getCurrentUserId())
+                .addOnSuccessListener(count -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    tvNotifBadge.setText(count > 99 ? "99+" : String.valueOf(count));
+                    tvNotifBadge.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+                });
+    }
+    private void setupSearch() {
+        etSearch = findViewById(R.id.etSearchQuestion);
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(Editable s) {
+                if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
+                final String text = s.toString();
+                searchRunnable = () -> applySearch(text);
+                searchHandler.postDelayed(searchRunnable, 400);   // chờ người dùng ngừng gõ
+            }
+        });
+        etSearch.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
+                applySearch(v.getText().toString());
+                return true;
+            }
+            return false;
+        });
+    }
+
+    private void applySearch(String raw) {
+        String keyword = raw.trim();
+        if (keyword.equals(currentKeyword)) return;   // không đổi thì khỏi tải lại
+        currentKeyword = keyword;
+        loadFirstPage();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
     }
 }

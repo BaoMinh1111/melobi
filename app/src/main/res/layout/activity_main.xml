@@ -49,6 +49,7 @@
             android:drawableStart="@drawable/ic_search"
             android:drawablePadding="10dp"
             android:drawableTint="@color/text_tertiary"
+            android:imeOptions="actionSearch"
             android:hint="@string/hint_search_questions"
             android:importantForAutofill="no"
             android:inputType="text"

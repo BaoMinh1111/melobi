@@ -61,13 +61,17 @@ public class NotificationService {
     }
 
     public Task<Void> markAllAsRead(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return Tasks.forException(new IllegalArgumentException("userId không hợp lệ"));
+        }
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
                 .whereEqualTo("isRead", false)
+                .limit(500)                       // batch tối đa 500 thao tác
                 .get()
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) throw task.getException();
-                    WriteBatch batch = db.batch(); // tối đa 500 thao tác / batch
+                    WriteBatch batch = db.batch();
                     for (DocumentSnapshot d : task.getResult()) {
                         batch.update(d.getReference(), "isRead", true);
                     }
@@ -76,6 +80,7 @@ public class NotificationService {
     }
 
     public Task<Integer> getUnreadCount(String userId) {
+        if (userId == null || userId.isEmpty()) return Tasks.forResult(0);
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
                 .whereEqualTo("isRead", false)

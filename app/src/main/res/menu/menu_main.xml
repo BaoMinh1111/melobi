@@ -6,4 +6,9 @@
         android:id="@+id/action_init_sample_data"
         android:title="@string/action_init_sample_data"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_notifications"
+        android:title="Thông báo"
+        app:actionLayout="@layout/menu_notification_badge"
+        app:showAsAction="always" />
 </menu>
