@@ -235,3 +235,8 @@ public class FollowService {
         }
     }
 }
+/*1 số lỗi:
+* Mất dữ liệu khi thoát app: Mở lại app thì mọi lượt follow biến mất
+* Mỗi new FollowService() có danh sách riêng: Màn hình chị follow xong, màn hình Nghi tạo FollowService mới sẽ thấy “chưa follow”
+* Không chia sẻ giữa các người dùng: Người được follow không thể biết có ai follow mình, nên getFollowers() luôn rỗng trên máy của họ
+* Không có suggestUsers: Hàm này cần đọc users từ Firestore, nằm ngoài danh sách bộ nhớ*/
