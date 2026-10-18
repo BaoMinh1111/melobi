@@ -13,15 +13,25 @@ import com.google.firebase.firestore.QuerySnapshot;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import android.content.Context;
+import android.util.Log;
 
 import vn.edu.ueh.melobi_nhom5.entity.Like;
 import vn.edu.ueh.melobi_nhom5.model.Question;
 import vn.edu.ueh.melobi_nhom5.entity.Notification;
+import vn.edu.ueh.melobi_nhom5.database.QuestionLocalStore;
+import vn.edu.ueh.melobi_nhom5.model.QuestionPage;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 public class QuestionService {
     private static final String COL_QUESTIONS = "questions";
     private static final String COL_LIKES = "likes";
+    private static final String TAG = "QuestionService";
+   // null nếu tạo service không có Context -> không có offline
 
     private final FirebaseFirestore db = FirebaseFirestore.getInstance();
+    private final QuestionLocalStore localStore;
     private final NotificationService notificationService = new NotificationService();
 
     // ---------- CRUD ----------
@@ -99,31 +109,86 @@ public class QuestionService {
 
     // ---------- Danh sách / lọc ----------
 
-    /** Feed: câu hỏi VISIBLE, mới nhất trước. Phân trang: lần đầu truyền lastVisible = null,
-     *  các lần sau truyền document cuối của trang trước (querySnapshot.getDocuments() phần tử cuối).
-     *  Trang cuối khi số document trả về < pageSize. Dùng toQuestion(doc) để chuyển thành Question.
-     *  Cần composite index (status + createdAt). Lưu ý: document chưa có field status
-     *  sẽ không xuất hiện ở truy vấn này. */
-    public Task<QuerySnapshot> getQuestions(DocumentSnapshot lastVisible, int pageSize) {
-        Query query = db.collection(COL_QUESTIONS)
-                .whereEqualTo("status", Question.STATUS_VISIBLE)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(pageSize);
+    // ---------- Feed (có đọc SQLite khi mất mạng) ----------
+
+    /** Câu truy vấn Firestore cho feed. category = null: tất cả ngành.
+     *  Con trỏ: ưu tiên DocumentSnapshot; nếu chỉ có lastCreatedAt (trang trước đến từ SQLite) thì dùng giá trị createdAt.
+     *  Cần composite index (status + createdAt) và (status + category + createdAt). */
+    private Query feedQuery(String category, DocumentSnapshot lastVisible, long lastCreatedAt, int pageSize) {
+        Query query = db.collection(COL_QUESTIONS).whereEqualTo("status", Question.STATUS_VISIBLE);
+        if (category != null) query = query.whereEqualTo("category", category);
+        query = query.orderBy("createdAt", Query.Direction.DESCENDING).limit(pageSize);
         if (lastVisible != null) query = query.startAfter(lastVisible);
-        return query.get();
-        // TODO: dùng NetworkUtils.isOnline() để chọn Firebase hay SQLite khi offline
+        else if (lastCreatedAt > 0) query = query.startAfter(lastCreatedAt);
+        return query;
     }
 
-    /** Lọc theo tên ngành (field "category" - feed đang dùng, có cả ở dữ liệu mẫu).
-     *  Cần composite index (status + category + createdAt). */
-    public Task<QuerySnapshot> filterByCategory(String category, DocumentSnapshot lastVisible, int pageSize) {
-        Query query = db.collection(COL_QUESTIONS)
-                .whereEqualTo("status", Question.STATUS_VISIBLE)
-                .whereEqualTo("category", category)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(pageSize);
-        if (lastVisible != null) query = query.startAfter(lastVisible);
-        return query.get();
+    /** Feed tất cả ngành. Lần đầu truyền lastVisible = null và lastCreatedAt = 0. */
+    public Task<QuestionPage> getQuestions(DocumentSnapshot lastVisible, long lastCreatedAt, int pageSize) {
+        return loadFeed(null, lastVisible, lastCreatedAt, pageSize);
+    }
+
+    /** Feed lọc theo tên ngành (field "category"). */
+    public Task<QuestionPage> filterByCategory(String category, DocumentSnapshot lastVisible,
+                                               long lastCreatedAt, int pageSize) {
+        return loadFeed(category, lastVisible, lastCreatedAt, pageSize);
+    }
+
+    private Task<QuestionPage> loadFeed(String category, DocumentSnapshot lastVisible,
+                                        long lastCreatedAt, int pageSize) {
+        final boolean isFirstPage = lastVisible == null && lastCreatedAt <= 0;
+
+        // Mất mạng: đọc thẳng SQLite
+        if (localStore != null && !NetworkUtils.isOnline()) {
+            return readLocal(category, lastCreatedAt, pageSize);
+        }
+
+        return feedQuery(category, lastVisible, lastCreatedAt, pageSize).get()
+                .continueWithTask(task -> {
+                    if (task.isSuccessful()) {
+                        QuestionPage page = toPage(task.getResult(), pageSize);
+                        // Dữ liệu thật từ server thì lưu lại cho lần offline sau
+                        if (localStore != null && !page.fromCache) {
+                            localStore.saveFeedPage(page.questions, category == null, isFirstPage, page.isLastPage)
+                                    .addOnFailureListener(e -> Log.w(TAG, "Không lưu được cache SQLite", e));
+                        }
+                        return Tasks.forResult(page);
+                    }
+                    Exception e = task.getException();
+                    // Có mạng giả (Wi-Fi không ra Internet): quay về SQLite. Lỗi khác (thiếu index, quyền) thì báo lên.
+                    if (localStore != null && isConnectivityError(e)) {
+                        return readLocal(category, lastCreatedAt, pageSize);
+                    }
+                    return Tasks.<QuestionPage>forException(e != null ? e : new Exception("Lỗi không xác định"));
+                });
+    }
+
+    private Task<QuestionPage> readLocal(String category, long lastCreatedAt, int pageSize) {
+        return localStore.getFeedPage(category, lastCreatedAt, pageSize).continueWith(task -> {
+            List<Question> list = task.getResult();
+            long last = list.isEmpty() ? 0 : list.get(list.size() - 1).getCreatedAt();
+            return new QuestionPage(list, null, last, list.size() < pageSize, true);
+        });
+    }
+
+    private static QuestionPage toPage(QuerySnapshot snap, int pageSize) {
+        List<DocumentSnapshot> docs = snap.getDocuments();
+        List<Question> list = new ArrayList<>();
+        for (DocumentSnapshot d : docs) {
+            Question q = toQuestion(d);
+            if (q != null) list.add(q);
+        }
+        DocumentSnapshot lastDoc = docs.isEmpty() ? null : docs.get(docs.size() - 1);
+        long lastCreated = list.isEmpty() ? 0 : list.get(list.size() - 1).getCreatedAt();
+        return new QuestionPage(list, lastDoc, lastCreated, docs.size() < pageSize,
+                snap.getMetadata().isFromCache());
+    }
+
+    private static boolean isConnectivityError(Exception e) {
+        if (!(e instanceof FirebaseFirestoreException)) return false;
+        FirebaseFirestoreException.Code c = ((FirebaseFirestoreException) e).getCode();
+        return c == FirebaseFirestoreException.Code.UNAVAILABLE
+                || c == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED;
     }
 
     /** Cần composite index (status + majorId + createdAt). */
@@ -144,9 +209,12 @@ public class QuestionService {
      * Cần composite index (status + titleLower).
      * Từ khóa rỗng thì trả về feed bình thường.
      */
-    public Task<QuerySnapshot> searchQuestions(String keyword, DocumentSnapshot lastVisible, int pageSize) {
+    public Task<QuestionPage> searchQuestions(String keyword, DocumentSnapshot lastVisible, int pageSize) {
         String q = keyword != null ? keyword.trim().toLowerCase(Locale.ROOT) : "";
-        if (q.isEmpty()) return getQuestions(lastVisible, pageSize);
+        if (q.isEmpty()) return getQuestions(lastVisible, 0, pageSize);
+        if (localStore != null && !NetworkUtils.isOnline()) {
+            return Tasks.forException(new IllegalStateException("Tìm kiếm cần kết nối mạng"));
+        }
 
         Query query = db.collection(COL_QUESTIONS)
                 .whereEqualTo("status", Question.STATUS_VISIBLE)
@@ -155,7 +223,7 @@ public class QuestionService {
                 .orderBy("titleLower")
                 .limit(pageSize);
         if (lastVisible != null) query = query.startAfter(lastVisible);
-        return query.get();
+        return query.get().continueWith(task -> toPage(task.getResult(), pageSize));
     }
     // ---------- Like ----------
 
@@ -275,5 +343,12 @@ public class QuestionService {
         return db.collection(COL_QUESTIONS).document(questionId)
                 .update("status", Question.STATUS_VISIBLE,
                         "updatedAt", System.currentTimeMillis());
+    }
+    public QuestionService() {
+        this.localStore = null;
+    }
+
+    public QuestionService(Context context) {
+        this.localStore = context != null ? new QuestionLocalStore(context.getApplicationContext()) : null;
     }
 }

@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class DatabaseHelper extends SQLiteOpenHelper {
     /* Khai báo Constant -> Tránh sai chính tả */
     private static final String DATABASE_NAME = "melobi_offline.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     public static final String TABLE_QUESTION = "Question";
     public static final String TABLE_ANSWER = "Answer";
@@ -34,6 +34,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_Q_SYNC_STATUS = "syncStatus";
     public static final String COL_Q_AUTHOR_NAME = "authorName";
     public static final String COL_Q_AUTHOR_AVATAR = "authorAvatarUrl";
+    public static final String COL_Q_CATEGORY = "category";
 
     // Cột của bảng ANSWER
     public static final String COL_A_ID = "answerId";
@@ -84,8 +85,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 + COL_Q_CREATED_AT + " INTEGER, "
                 + COL_Q_UPDATED_AT + " INTEGER, "
                 + COL_Q_SYNC_STATUS + " TEXT DEFAULT '" + SYNC_STATUS_SYNCED + "', "
-                + COL_Q_AUTHOR_NAME + " TEXT, "
-                + COL_Q_AUTHOR_AVATAR + " TEXT)";;
+                + COL_Q_AUTHOR_AVATAR + " TEXT, "
+                + COL_Q_CATEGORY + " TEXT)";;
 
         // Câu lệnh SQL tạo bảng Answer
         String CREATE_ANSWER_TABLE = "CREATE TABLE " + TABLE_ANSWER + " ("
@@ -115,6 +116,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         // Tạo INDEX cho cột SYNC_STATUS
         db.execSQL("CREATE INDEX idx_question_sync ON " + TABLE_QUESTION + "(" + COL_Q_SYNC_STATUS + ")");
         db.execSQL("CREATE INDEX idx_answer_sync ON " + TABLE_ANSWER + "(" + COL_A_SYNC_STATUS + ")");
+        db.execSQL("CREATE INDEX idx_question_created ON " + TABLE_QUESTION + "(" + COL_Q_CREATED_AT + ")");
     }
 
     /* Hàm xử lý khi nâng cấp phiên bản Database */
@@ -145,6 +147,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             } catch (Exception e) {
                 // Bắt lỗi nếu lỡ cột đã tồn tại
+                e.printStackTrace();
+            }
+        }
+        if (oldVersion < 3) {
+            try {
+                db.execSQL("ALTER TABLE " + TABLE_QUESTION + " ADD COLUMN " + COL_Q_CATEGORY + " TEXT");
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_question_created ON "
+                        + TABLE_QUESTION + "(" + COL_Q_CREATED_AT + ")");
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }

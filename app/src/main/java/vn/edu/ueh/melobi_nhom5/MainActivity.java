@@ -14,6 +14,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.net.ConnectivityManager;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -41,6 +42,8 @@ import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
 import vn.edu.ueh.melobi_nhom5.service.NotificationService;
+import vn.edu.ueh.melobi_nhom5.model.QuestionPage;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 /**
  * Feed câu hỏi: tải theo trang (QuestionService.getQuestions / filterByCategory),
@@ -55,6 +58,10 @@ public class MainActivity extends AppCompatActivity {
     private User currentUser;
     private QuestionService questionService;
     private QuestionAdapter questionAdapter;
+    private long lastCreatedAt;                 // con trỏ createdAt của trang cuối (dùng khi đọc SQLite)
+    private boolean hasLoadedPage;              // đã tải xong ít nhất một trang của bộ lọc hiện tại
+    private boolean showingCache;               // trang gần nhất đến từ cache/SQLite
+    private ConnectivityManager.NetworkCallback networkCallback;
 
     private RecyclerView rvQuestions;
     private ProgressBar pbMainLoading;     // tải trang đầu
@@ -98,7 +105,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         currentUser = AuthHelper.getCurrentUser();
-        questionService = new QuestionService();
+        NetworkUtils.initialize(getApplicationContext());   // an toàn nếu Application chưa gọi
+        questionService = new QuestionService(getApplicationContext());
         notificationService = new NotificationService();
 
         initViews();
@@ -116,6 +124,9 @@ public class MainActivity extends AppCompatActivity {
             loadFirstPage();
             refreshNotificationBadge();
         });
+        networkCallback = NetworkUtils.registerNetworkListener(() -> runOnUiThread(() -> {
+            if (showingCache && !isFinishing() && !isDestroyed()) loadFirstPage();
+        }));
     }
 
     private void initViews() {
@@ -196,6 +207,9 @@ public class MainActivity extends AppCompatActivity {
     private void loadFirstPage() {
         loadToken++;
         lastVisible = null;
+        lastCreatedAt = 0;
+        hasLoadedPage = false;
+        showingCache = false;
         loadedCount = 0;
         isLastPage = false;
         isLoading = false;
@@ -213,33 +227,36 @@ public class MainActivity extends AppCompatActivity {
     private void loadPage() {
         if (isLoading || isLastPage) return;
         isLoading = true;
-        final boolean isFirstPage = (lastVisible == null);
+        final boolean isFirstPage = !hasLoadedPage;
         final int token = loadToken;
         (isFirstPage ? pbMainLoading : pbLoadMore).setVisibility(View.VISIBLE);
 
-        Task<QuerySnapshot> task;
+        Task<QuestionPage> task;
         if (!currentKeyword.isEmpty()) {
             task = questionService.searchQuestions(currentKeyword, lastVisible, PAGE_SIZE);
         } else if (CATEGORY_ALL.equals(currentCategory)) {
-            task = questionService.getQuestions(lastVisible, PAGE_SIZE);
+            task = questionService.getQuestions(lastVisible, lastCreatedAt, PAGE_SIZE);
         } else {
-            task = questionService.filterByCategory(currentCategory, lastVisible, PAGE_SIZE);
+            task = questionService.filterByCategory(currentCategory, lastVisible, lastCreatedAt, PAGE_SIZE);
         }
 
-        task.addOnSuccessListener(snapshot -> {
+        task.addOnSuccessListener(result -> {
             if (token != loadToken || isFinishing() || isDestroyed()) return;   // kết quả của bộ lọc cũ
             isLoading = false;
             pbMainLoading.setVisibility(View.GONE);
             pbLoadMore.setVisibility(View.GONE);
 
-            List<DocumentSnapshot> docs = snapshot.getDocuments();
-            List<Question> page = new ArrayList<>();
-            for (DocumentSnapshot doc : docs) {
-                Question q = QuestionService.toQuestion(doc);
-                if (q != null) page.add(q);
+            List<Question> page = result.questions;
+            // Trang từ SQLite thì bỏ con trỏ Firestore, trang sau (dù online hay offline) dùng createdAt
+            if (result.fromCache && currentKeyword.isEmpty()) lastVisible = null;
+            else if (result.lastDoc != null) lastVisible = result.lastDoc;
+            if (result.lastCreatedAt > 0) lastCreatedAt = result.lastCreatedAt;
+            isLastPage = result.isLastPage;
+            hasLoadedPage = true;
+            showingCache = result.fromCache;
+            if (result.fromCache && isFirstPage) {
+                Toast.makeText(this, "Đang xem dữ liệu đã lưu (ngoại tuyến)", Toast.LENGTH_SHORT).show();
             }
-            if (!docs.isEmpty()) lastVisible = docs.get(docs.size() - 1);
-            isLastPage = docs.size() < PAGE_SIZE;
 
             if (isFirstPage) {
                 questionAdapter.setQuestions(page);
@@ -248,15 +265,16 @@ public class MainActivity extends AppCompatActivity {
             }
             loadedCount += page.size();
 
-            // Chưa có dữ liệu nào ở feed "Tất cả" -> nạp dữ liệu mẫu (chỉ thử một lần)
-            if (loadedCount == 0 && CATEGORY_ALL.equals(currentCategory)
-                    && currentKeyword.isEmpty() && !sampleInitTried)  {
+            // Chưa có dữ liệu nào ở feed "Tất cả" (và đang có mạng thật) -> nạp dữ liệu mẫu, chỉ thử một lần
+            if (loadedCount == 0 && CATEGORY_ALL.equals(currentCategory) && currentKeyword.isEmpty()
+                    && !result.fromCache && !sampleInitTried) {
                 sampleInitTried = true;
                 initSampleData();
                 return;
             }
             tvMainEmpty.setVisibility(loadedCount == 0 ? View.VISIBLE : View.GONE);
         }).addOnFailureListener(e -> {
+            // GIỮ NGUYÊN khối xử lý lỗi cũ của bạn
             if (token != loadToken || isFinishing() || isDestroyed()) return;
             isLoading = false;
             pbMainLoading.setVisibility(View.GONE);
@@ -265,7 +283,6 @@ public class MainActivity extends AppCompatActivity {
             if (e instanceof FirebaseFirestoreException
                     && ((FirebaseFirestoreException) e).getCode()
                     == FirebaseFirestoreException.Code.FAILED_PRECONDITION) {
-                // Thiếu composite index: Logcat có link để tạo index chỉ với một cú bấm
                 Toast.makeText(this, "Thiếu index Firestore - xem Logcat (tag " + TAG + ") để lấy link tạo", Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this, "Lỗi tải danh sách câu hỏi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -355,5 +372,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (searchRunnable != null) searchHandler.removeCallbacks(searchRunnable);
+        if (networkCallback != null) {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (cm != null) cm.unregisterNetworkCallback(networkCallback);
+        }
     }
 }
