@@ -113,3 +113,10 @@ public class Notification {
         this.createdAt = createdAt;
     }
 }
+/*1 số lỗi sau:
+* isRead bị ghi thành hai trường read và isRead
+* Thiếu @DocumentId nên không có ID để đánh dấu đã đọc
+* Constructor rỗng cũng gán createdAt = System.currentTimeMillis(). Có hai tác động:
+- Máy lệch giờ thì thứ tự thông báo sai, vì getNotifications sắp xếp theo createdAt.
+- Constructor rỗng gán giờ hiện tại trước khi Firestore điền dữ liệu. Nếu document thiếu createdAt, thông báo cũ sẽ hiện như vừa mới tạo mà không có dấu hiệu gì. 
+Nên để constructor rỗng không gán gì, chỉ constructor 5 tham số gán giờ.*/
