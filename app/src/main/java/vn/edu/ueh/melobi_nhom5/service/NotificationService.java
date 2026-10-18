@@ -67,9 +67,13 @@ public class NotificationService {
     }
 }
 /* 1 số vấn đề nhỏ sau:
-* receiverId.equals(actorId) sẽ NPE nếu receiverId null (ví dụ caller truyền thiếu ownerId). Vì nó chạy trong listener nên app crash
--> Cách sửa: if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
-* getNotifications không giới hạn số lượng
--> Cách sửa: Thêm .limit(50)
-* markAllAsRead dùng task.getResult() mà không kiểm tra task thành công
--> Cách sửa: Thêm if (!task.isSuccessful()) throw task.getException();*/
+* Thông báo bị tạo lặp: Hàm luôn dùng add(n) nên mỗi hành động tạo thêm một thông báo mới
+* receiverId rỗng ("") vẫn lọt qua: Chỉ kiểm tra null. Chuỗi rỗng sẽ tạo thông báo cho “không ai”. Thêm receiverId.trim().isEmpty()
+* Không kiểm tra type, targetId, targetType: Thông báo thiếu targetId không mở được nội dung khi bấm vào. Từ chối nếu một trong các trường này rỗng
+* markAllAsRead chưa có limit(500): Comment ghi tối đa 500 thao tác nhưng truy vấn không giới hạn. Quá 500 thông báo chưa đọc thì cả batch lỗi và không thông báo nào 
+được đánh dấu. Thêm .limit(500) (người dùng bấm lần nữa nếu còn)
+* throw task.getException(): Có thể ném null khi task bị hủy. Thay bằng task.getResult() ở đầu hàm để ném đúng lỗi
+* markAsRead(null) crash: document(null) ném ngoại lệ. Kiểm tra notificationId rỗng và trả Tasks.forException(...)
+* getUnreadCount cần mạng: AggregateSource.SERVER thất bại khi offline. Giao diện phải bắt addOnFailureListener (ẩn chấm đỏ) thay vì để lỗi lan ra
+* pushFCM chưa có: thay bằng addSnapshotListener trên notifications cho người nhận để cập nhật tức thời khi app mở
+* Hằng số targetType: Hàm nhận chuỗi tự do, nơi gọi tự viết hoặc mượn Like.TYPE_QUESTION. Dùng chung các hằng số trong Notification (TARGET_QUESTION, TARGET_ANSWER...)*/
