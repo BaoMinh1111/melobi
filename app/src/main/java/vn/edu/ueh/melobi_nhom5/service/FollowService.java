@@ -8,11 +8,17 @@ import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import vn.edu.ueh.melobi_nhom5.entity.Notification;
 
 public class FollowService {
 
     private final List<Follow> follows = new ArrayList<>();
+    private NotificationService notificationService;
 
+    // Cho phep gan service thong bao khi can
+    public void setNotificationService(NotificationService service) {
+        this.notificationService = service;
+    }
     // Theo doi nguoi dung
     public boolean followUser(String followerId, String followingId) {
         validateIds(followerId, followingId);
@@ -38,6 +44,24 @@ public class FollowService {
         );
 
         follows.add(follow);
+
+// Chi thong bao khi follow moi thanh cong
+        if (notificationService != null) {
+            notificationService.createNotification(
+                    followingId,              // Nguoi nhan
+                    followerId,               // Nguoi thuc hien
+                    Notification.TYPE_FOLLOW,  // Loai FOLLOW
+                    followerId,               // Mo profile nguoi follow
+                    "USER"
+            ).addOnFailureListener(e ->
+                    android.util.Log.e(
+                            "FollowService",
+                            "Khong tao duoc thong bao FOLLOW",
+                            e
+                    )
+            );
+        }
+
         return true;
     }
 
