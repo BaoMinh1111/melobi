@@ -21,6 +21,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.io.Serializable;
 import java.util.List;
@@ -77,6 +79,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private TextView tvQuestionLikeCount;
     private boolean questionLiked;
     private boolean likeBusy;
+    private boolean likeStateKnown;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -100,6 +103,12 @@ public class QuestionDetailActivity extends AppCompatActivity {
         answerService = new AnswerService();
         questionService = new QuestionService();
         notificationService = new NotificationService();
+
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(this, "Chưa đăng nhập được, vui lòng kiểm tra mạng", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
         currentUser = AuthHelper.getCurrentUser();
 
         initViews();
@@ -140,7 +149,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private void loadQuestion() {
         questionService.getQuestionDetail(questionId)
                 .addOnSuccessListener(loaded -> {
-                    if (isFinishing() || isDestroyed()) return;
+                    if (isUiGone()) return;
                     if (loaded == null) {      // không tồn tại hoặc không còn VISIBLE
                         Toast.makeText(this, "Câu hỏi không còn tồn tại", Toast.LENGTH_SHORT).show();
                         finish();
@@ -152,8 +161,11 @@ public class QuestionDetailActivity extends AppCompatActivity {
                     loadLikeState();
                 })
                 .addOnFailureListener(e -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    Toast.makeText(this, "Lỗi tải câu hỏi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    if (isUiGone()) return;
+                    Snackbar.make(findViewById(android.R.id.content),
+                                    "Lỗi tải câu hỏi: " + e.getMessage(), Snackbar.LENGTH_INDEFINITE)
+                            .setAction("Thử lại", v -> loadQuestion())
+                            .show();
                 });
     }
 
@@ -218,6 +230,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         answerRepository.getAnswersByQuestionId(questionId, new AnswerRepository.Callback<List<Answer>>() {
             @Override
             public void onSuccess(List<Answer> list) {
+                if (isUiGone()) return;
                 pbAnswersLoading.setVisibility(View.GONE);
                 if (list.isEmpty()) {
                     tvEmptyAnswers.setVisibility(View.VISIBLE);
@@ -230,6 +243,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception e) {
+                if (isUiGone()) return;
                 pbAnswersLoading.setVisibility(View.GONE);
                 Toast.makeText(QuestionDetailActivity.this, "Lỗi tải câu trả lời: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
@@ -255,18 +269,19 @@ public class QuestionDetailActivity extends AppCompatActivity {
                 new AnswerService.Callback<Answer>() {
                     @Override
                     public void onSuccess(Answer result) {
-                        btnSendAnswer.setEnabled(true);
-                        etAnswerInput.setText("");
-                        Toast.makeText(QuestionDetailActivity.this, "Đã gửi câu trả lời", Toast.LENGTH_SHORT).show();
-                        // Báo cho chủ câu hỏi (bỏ qua nếu tự trả lời câu hỏi của mình)
                         notificationService.createNotification(
                                 question.getUserId(), currentUser.getId(),
                                 Notification.TYPE_NEW_ANSWER, questionId, Like.TYPE_QUESTION);
+                        if (isUiGone()) return;
+                        btnSendAnswer.setEnabled(true);
+                        etAnswerInput.setText("");
+                        Toast.makeText(QuestionDetailActivity.this, "Đã gửi câu trả lời", Toast.LENGTH_SHORT).show();
                         loadAnswers();
                     }
 
                     @Override
                     public void onError(Exception e) {
+                        if (isUiGone()) return;
                         btnSendAnswer.setEnabled(true);
                         Toast.makeText(QuestionDetailActivity.this, "Gửi câu trả lời thất bại: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -275,20 +290,17 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void toggleLike(Answer answer) {
-        answerRepository.toggleLike(answer.getId(), currentUser.getId(), new AnswerRepository.Callback<Answer>() {
+        answerService.toggleLike(answer.getId(), answer.getUserId(), questionId,
+                currentUser.getId(), new AnswerService.Callback<Answer>() {
             @Override
             public void onSuccess(Answer result) {
-                // result là Answer sau khi toggle, nên isLikedBy = true nghĩa là vừa like
-                if (result.isLikedBy(currentUser.getId())) {
-                    notificationService.createNotification(
-                            answer.getUserId(), currentUser.getId(),
-                            Notification.TYPE_LIKE, answer.getQuestionId(), Like.TYPE_QUESTION);
-                }
+                if (isUiGone()) return;
                 loadAnswers();
             }
 
             @Override
             public void onError(Exception e) {
+                if (isUiGone()) return;
                 Toast.makeText(QuestionDetailActivity.this, "Lỗi tương tác thích: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -311,12 +323,14 @@ public class QuestionDetailActivity extends AppCompatActivity {
                     answerRepository.updateAnswer(answer.getId(), updatedText, new AnswerRepository.Callback<Void>() {
                         @Override
                         public void onSuccess(Void result) {
+                            if (isUiGone()) return;
                             Toast.makeText(QuestionDetailActivity.this, "Đã cập nhật câu trả lời", Toast.LENGTH_SHORT).show();
                             loadAnswers();
                         }
 
                         @Override
                         public void onError(Exception e) {
+                            if (isUiGone()) return;
                             Toast.makeText(QuestionDetailActivity.this, "Lỗi cập nhật: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -333,12 +347,14 @@ public class QuestionDetailActivity extends AppCompatActivity {
                     answerRepository.deleteAnswer(answer, new AnswerRepository.Callback<Void>() {
                         @Override
                         public void onSuccess(Void result) {
+                            if (isUiGone()) return;
                             Toast.makeText(QuestionDetailActivity.this, "Đã xóa câu trả lời", Toast.LENGTH_SHORT).show();
                             loadAnswers();
                         }
 
                         @Override
                         public void onError(Exception e) {
+                            if (isUiGone()) return;
                             Toast.makeText(QuestionDetailActivity.this, "Lỗi xóa câu trả lời: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     });
@@ -355,14 +371,21 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private void loadLikeState() {
         questionService.isQuestionLikedByUser(questionId, currentUser.getId())
                 .addOnSuccessListener(liked -> {
-                    if (isFinishing() || isDestroyed()) return;
+                    if (isUiGone()) return;
                     questionLiked = Boolean.TRUE.equals(liked);
+                    likeStateKnown = true;
                     applyLikeStyle();
                     btnLikeQuestion.setEnabled(true);
+                })
+                .addOnFailureListener(e -> {
+                    if (isUiGone()) return;
+                    likeStateKnown = false;
+                    btnLikeQuestion.setEnabled(true);   // bấm sẽ thử tải lại
                 });
     }
 
     private void onQuestionLikeClicked() {
+        if (!likeStateKnown) { loadLikeState(); return; }
         if (question == null || likeBusy) return;
         likeBusy = true;
         final boolean wasLiked = questionLiked;
@@ -373,7 +396,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
         task.addOnSuccessListener(changed -> {
             likeBusy = false;
-            if (isFinishing() || isDestroyed()) return;
+            if (isUiGone()) return;
             questionLiked = !wasLiked;
             if (Boolean.TRUE.equals(changed)) {
                 long delta = wasLiked ? -1 : 1;
@@ -382,7 +405,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
             applyLikeStyle();
         }).addOnFailureListener(e -> {
             likeBusy = false;
-            if (isFinishing() || isDestroyed()) return;
+            if (isUiGone()) return;
             Toast.makeText(this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         });
     }
@@ -394,6 +417,9 @@ public class QuestionDetailActivity extends AppCompatActivity {
         ivQuestionLike.setImageResource(questionLiked ? R.drawable.ic_thumb_up_filled : R.drawable.ic_thumb_up);
         ivQuestionLike.setColorFilter(color);
         tvQuestionLikeCount.setTextColor(color);
+    }
+    private boolean isUiGone() {
+        return isFinishing() || isDestroyed();
     }
 }
 /*1 số lỗi:

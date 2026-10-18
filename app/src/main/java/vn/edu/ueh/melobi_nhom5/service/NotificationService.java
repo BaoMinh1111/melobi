@@ -27,16 +27,23 @@ public class NotificationService {
         }
         Notification n = new Notification(receiverId, actorId, type, targetId, targetType);
 
-        if (Notification.TYPE_LIKE.equals(type) && actorId != null) {
-            // ID cố định: like lại chỉ ghi đè thông báo cũ, không tạo thêm
-            DocumentReference ref = db.collection(COL_NOTIFICATIONS)
-                    .document(actorId + "_" + type + "_" + targetType + "_" + targetId);
-            return ref.set(n).continueWith(task -> {
-                task.getResult();   // ném lại exception nếu ghi lỗi
+        if (isToggleType(type) && actorId != null && targetId != null && targetType != null) {
+            // ID gồm cả người nhận: hai người nhận khác nhau không bao giờ trùng ID
+            DocumentReference ref = db.collection(COL_NOTIFICATIONS).document(
+                    receiverId + "_" + actorId + "_" + type + "_" + targetType + "_" + targetId);
+            return db.runTransaction(tx -> {
+                if (!tx.get(ref).exists()) {   // đã có thì giữ nguyên, không đặt lại "chưa đọc"
+                    tx.set(ref, n);
+                }
                 return ref;
             });
         }
-        return db.collection(COL_NOTIFICATIONS).add(n);
+        return db.collection(COL_NOTIFICATIONS).add(n);   // NEW_ANSWER, NEW_COMMENT: mỗi lần là một sự kiện mới
+    }
+
+    /** Các hành động bật/tắt được, cần chống spam thông báo. */
+    private static boolean isToggleType(String type) {
+        return Notification.TYPE_LIKE.equals(type) || Notification.TYPE_FOLLOW.equals(type);
     }
 
     /** Cần composite index (receiverId + createdAt). Lần chạy đầu Logcat sẽ in link tạo index. */

@@ -4,9 +4,12 @@ import android.text.TextUtils;
 
 import vn.edu.ueh.melobi_nhom5.model.Answer;
 import vn.edu.ueh.melobi_nhom5.repository.AnswerRepository;
+import vn.edu.ueh.melobi_nhom5.entity.Like;
+import vn.edu.ueh.melobi_nhom5.entity.Notification;
 
 public class AnswerService {
     private final AnswerRepository answerRepository;
+    private final NotificationService notificationService = new NotificationService();
 
     public AnswerService() {
         this.answerRepository = new AnswerRepository();
@@ -16,7 +19,21 @@ public class AnswerService {
         void onSuccess(T result);
         void onError(Exception e);
     }
-
+    public void toggleLike(String answerId, String answerOwnerId, String questionId,
+                           String userId, Callback<Answer> callback) {
+        answerRepository.toggleLike(answerId, userId, new AnswerRepository.Callback<Answer>() {
+            @Override public void onSuccess(Answer result) {
+                if (result.isLikedBy(userId)) {
+                    notificationService.createNotification(answerOwnerId, userId,
+                            Notification.TYPE_LIKE, questionId, Like.TYPE_QUESTION);
+                }
+                if (callback != null) callback.onSuccess(result);
+            }
+            @Override public void onError(Exception e) {
+                if (callback != null) callback.onError(e);
+            }
+        });
+    }
     /**
      * Tạo và lưu câu trả lời mới vào Firestore
      */
