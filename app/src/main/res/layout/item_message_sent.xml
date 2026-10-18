@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="end"
+    android:orientation="vertical"
+    android:paddingVertical="4dp">
+
+    <TextView
+        android:id="@+id/tvMessageContent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="64dp"
+        android:background="@drawable/bg_chat_bubble_sent"
+        android:maxWidth="280dp"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="10dp"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        tools:text="Xin chào, mình muốn hỏi về bài tập." />
+
+    <TextView
+        android:id="@+id/tvMessageStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="@color/text_tertiary"
+        android:textSize="11sp"
+        tools:text="Đã gửi • 2 phút" />
+</LinearLayout>

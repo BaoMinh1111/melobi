@@ -52,4 +52,16 @@
     <string name="action_admin">Quản trị</string>
     <string name="message_admin_signed_in">Đăng nhập với quyền quản trị</string>
     <string name="error_admin_forbidden">Bạn không có quyền truy cập trang quản trị</string>
+    <string name="action_chat">Tin nhắn</string>
+    <string name="title_chat_list">Tin nhắn</string>
+    <string name="title_chat">Khung chat</string>
+    <string name="hint_write_message">Nhập tin nhắn...</string>
+    <string name="empty_chat_list">Chưa có cuộc trò chuyện.\nMở một câu hỏi và nhấn tên tác giả để bắt đầu chat.</string>
+    <string name="empty_chat_messages">Chưa có tin nhắn. Hãy gửi lời chào để bắt đầu.</string>
+    <string name="empty_last_message">Chưa có tin nhắn</string>
+    <string name="label_message_sent">Đã gửi</string>
+    <string name="label_message_read">Đã xem</string>
+    <string name="error_empty_message">Tin nhắn không được để trống</string>
+    <string name="error_chat_self">Không thể chat với chính mình</string>
+    <string name="action_open_chat">Nhắn tin</string>
 </resources>

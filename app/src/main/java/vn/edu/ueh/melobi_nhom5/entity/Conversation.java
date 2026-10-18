@@ -1,22 +1,20 @@
-
 package vn.edu.ueh.melobi_nhom5.entity;
+
+import com.google.firebase.firestore.Exclude;
 
 import java.util.Date;
 
 public class Conversation {
 
-    // Khai bao thuoc tinh
     private String conversationId;
     private String user1Id;
     private String user2Id;
     private String lastMessage;
     private Date updatedAt;
 
-    // Constructor rong
     public Conversation() {
     }
 
-    // Constructor day du
     public Conversation(String conversationId,
                         String user1Id,
                         String user2Id,
@@ -29,29 +27,12 @@ public class Conversation {
         this.updatedAt = updatedAt;
     }
 
-    // Getter va Setter
     public String getConversationId() {
         return conversationId;
     }
 
     public void setConversationId(String conversationId) {
         this.conversationId = conversationId;
-    }
-
-    public String getUserId1() {
-        return user1Id;
-    }
-
-    public void setUserId1(String userId1) {
-        this.user1Id = userId1;
-    }
-
-    public String getUserId2() {
-        return user2Id;
-    }
-
-    public void setUserId2(String userId2) {
-        this.user2Id = userId2;
     }
 
     public String getUser1Id() {
@@ -68,6 +49,26 @@ public class Conversation {
 
     public void setUser2Id(String user2Id) {
         this.user2Id = user2Id;
+    }
+
+    @Exclude
+    public String getUserId1() {
+        return user1Id;
+    }
+
+    @Exclude
+    public void setUserId1(String userId1) {
+        this.user1Id = userId1;
+    }
+
+    @Exclude
+    public String getUserId2() {
+        return user2Id;
+    }
+
+    @Exclude
+    public void setUserId2(String userId2) {
+        this.user2Id = userId2;
     }
 
     public String getLastMessage() {

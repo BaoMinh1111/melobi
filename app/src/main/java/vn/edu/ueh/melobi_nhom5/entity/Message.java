@@ -1,11 +1,12 @@
-
 package vn.edu.ueh.melobi_nhom5.entity;
+
+import com.google.firebase.firestore.Exclude;
+import com.google.firebase.firestore.PropertyName;
 
 import java.util.Date;
 
 public class Message {
 
-    // Khai bao cac thuoc tinh
     private String messageId;
     private String conversationId;
     private String senderId;
@@ -13,11 +14,9 @@ public class Message {
     private Date sentAt;
     private boolean isRead;
 
-    // Constructor rong
     public Message() {
     }
 
-    // Constructor day du tham so
     public Message(String messageId,
                    String conversationId,
                    String senderId,
@@ -31,8 +30,6 @@ public class Message {
         this.sentAt = sentAt;
         this.isRead = isRead;
     }
-
-    // Getter va Setter
 
     public String getMessageId() {
         return messageId;
@@ -74,14 +71,17 @@ public class Message {
         this.sentAt = sentAt;
     }
 
+    @PropertyName("isRead")
     public boolean getIsRead() {
         return isRead;
     }
 
+    @PropertyName("isRead")
     public void setIsRead(boolean isRead) {
         this.isRead = isRead;
     }
 
+    @Exclude
     public boolean isRead() {
         return isRead;
     }

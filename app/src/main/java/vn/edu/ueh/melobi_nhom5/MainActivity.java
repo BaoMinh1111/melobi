@@ -117,6 +117,10 @@ public class MainActivity extends AppCompatActivity {
                 }
                 return true;
             }
+            if (itemId == R.id.action_chat) {
+                startActivity(new Intent(MainActivity.this, ChatListActivity.class));
+                return true;
+            }
             if (itemId == R.id.action_profile) {
                 startActivity(new Intent(MainActivity.this, ProfileActivity.class));
                 return true;

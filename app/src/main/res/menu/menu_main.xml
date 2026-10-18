@@ -8,6 +8,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_chat"
+        android:title="@string/action_chat"
+        app:showAsAction="ifRoom" />
+
+    <item
         android:id="@+id/action_profile"
         android:title="@string/action_profile"
         app:showAsAction="never" />

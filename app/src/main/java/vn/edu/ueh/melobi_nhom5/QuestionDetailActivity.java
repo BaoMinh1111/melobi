@@ -1,5 +1,6 @@
 package vn.edu.ueh.melobi_nhom5;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
@@ -99,6 +100,8 @@ public class QuestionDetailActivity extends AppCompatActivity {
         setupRecyclerView();
 
         toolbarDetail.setNavigationOnClickListener(v -> finish());
+        tvQuestionAuthorName.setOnClickListener(v -> openChatWithAuthor());
+        tvQuestionAvatar.setOnClickListener(v -> openChatWithAuthor());
         btnSendAnswer.setOnClickListener(v -> submitAnswer());
         btnSendAnswer.setEnabled(false);          // chỉ cho gửi sau khi xác nhận câu hỏi còn hiển thị
 
@@ -169,6 +172,30 @@ public class QuestionDetailActivity extends AppCompatActivity {
                 DateUtils.FORMAT_ABBREV_RELATIVE
         );
         tvQuestionTime.setText(relativeTime);
+        tvQuestionAuthorName.setTextColor(getResources().getColor(R.color.melobi_primary, getTheme()));
+    }
+
+    private void openChatWithAuthor() {
+        if (question == null) {
+            return;
+        }
+        String authorId = question.getUserId();
+        if (authorId == null || authorId.trim().isEmpty()) {
+            Toast.makeText(this, "Không tìm thấy tác giả câu hỏi", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (currentUser != null && authorId.equals(currentUser.getId())) {
+            Toast.makeText(this, R.string.error_chat_self, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Intent intent = new Intent(this, ChatActivity.class);
+        intent.putExtra(ChatActivity.EXTRA_OTHER_USER_ID, authorId);
+        String authorName = question.getUserName();
+        if (authorName != null && !authorName.trim().isEmpty()) {
+            intent.putExtra(ChatActivity.EXTRA_OTHER_USER_NAME, authorName);
+        }
+        startActivity(intent);
     }
 
     private void setupRecyclerView() {
