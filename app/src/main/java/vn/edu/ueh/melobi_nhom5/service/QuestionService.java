@@ -1,6 +1,8 @@
 package vn.edu.ueh.melobi_nhom5.service;
 
+import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
@@ -14,7 +16,7 @@ import java.util.Map;
 
 import vn.edu.ueh.melobi_nhom5.entity.Like;
 import vn.edu.ueh.melobi_nhom5.model.Question;
-
+import vn.edu.ueh.melobi_nhom5.entity.Notification;
 public class QuestionService {
     private static final String COL_QUESTIONS = "questions";
     private static final String COL_LIKES = "likes";
@@ -126,6 +128,7 @@ public class QuestionService {
 
     /** Cần composite index (status + majorId + createdAt). */
     public Task<QuerySnapshot> filterByMajor(String majorId, DocumentSnapshot lastVisible, int pageSize) {
+        if (majorId == null || majorId.isEmpty()) return getQuestions(lastVisible, pageSize);
         Query query = db.collection(COL_QUESTIONS)
                 .whereEqualTo("status", Question.STATUS_ACTIVE)
                 .whereEqualTo("majorId", majorId)
@@ -134,63 +137,143 @@ public class QuestionService {
         if (lastVisible != null) query = query.startAfter(lastVisible);
         return query.get();
     }
+    /**
+     * Tìm câu hỏi theo tiền tố tiêu đề (không phân biệt hoa/thường), chỉ lấy VISIBLE.
+     * Firestore không có full-text search nên đây là tìm "bắt đầu bằng".
+     * Kết quả xếp theo titleLower (không phải theo thời gian).
+     * Cần composite index (status + titleLower).
+     * Từ khóa rỗng thì trả về feed bình thường.
+     */
+    public Task<QuerySnapshot> searchQuestions(String keyword, DocumentSnapshot lastVisible, int pageSize) {
+        String q = keyword != null ? keyword.trim().toLowerCase(Locale.ROOT) : "";
+        if (q.isEmpty()) return getQuestions(lastVisible, pageSize);
 
+        Query query = db.collection(COL_QUESTIONS)
+                .whereEqualTo("status", Question.STATUS_VISIBLE)
+                .whereGreaterThanOrEqualTo("titleLower", q)
+                .whereLessThanOrEqualTo("titleLower", q + "\uf8ff")
+                .orderBy("titleLower")
+                .limit(pageSize);
+        if (lastVisible != null) query = query.startAfter(lastVisible);
+        return query.get();
+    }
     // ---------- Like ----------
 
-    /** Trả về true nếu like mới được tạo, false nếu trước đó đã like rồi. */
+    /** Trả về true nếu like mới được tạo, false nếu đã like rồi. */
     public Task<Boolean> likeQuestion(String questionId, String ownerId, String userId) {
+        if (isBlank(questionId) || isBlank(userId)) {
+            return Tasks.forException(new IllegalArgumentException("questionId/userId không hợp lệ"));
+        }
         DocumentReference likeRef = db.collection(COL_LIKES)
                 .document(Like.buildId(userId, Like.TYPE_QUESTION, questionId));
         DocumentReference questionRef = db.collection(COL_QUESTIONS).document(questionId);
 
         return db.runTransaction(tx -> {
-            if (tx.get(likeRef).exists()) return false;          // đã like rồi
+            // Phải đọc hết trước khi ghi
+            DocumentSnapshot q = tx.get(questionRef);
+            DocumentSnapshot like = tx.get(likeRef);
+
+            if (!q.exists() || !Question.STATUS_VISIBLE.equals(q.getString("status"))) {
+                throw new FirebaseFirestoreException("Câu hỏi không tồn tại hoặc đã bị ẩn",
+                        FirebaseFirestoreException.Code.NOT_FOUND);
+            }
+            if (like.exists()) return false;
+
             tx.set(likeRef, new Like(userId, questionId, Like.TYPE_QUESTION));
             tx.update(questionRef, "likeCount", FieldValue.increment(1));
             return true;
         }).addOnSuccessListener(created -> {
-            if (created) {
+            if (Boolean.TRUE.equals(created)) {
                 notificationService.createNotification(
-                        ownerId, userId, "LIKE", questionId, Like.TYPE_QUESTION);
+                        ownerId, userId, Notification.TYPE_LIKE, questionId, Like.TYPE_QUESTION);
             }
         });
     }
 
     /** Trả về true nếu bỏ like thành công, false nếu trước đó chưa like. */
     public Task<Boolean> unlikeQuestion(String questionId, String userId) {
+        if (isBlank(questionId) || isBlank(userId)) {
+            return Tasks.forException(new IllegalArgumentException("questionId/userId không hợp lệ"));
+        }
         DocumentReference likeRef = db.collection(COL_LIKES)
                 .document(Like.buildId(userId, Like.TYPE_QUESTION, questionId));
         DocumentReference questionRef = db.collection(COL_QUESTIONS).document(questionId);
 
         return db.runTransaction(tx -> {
-            if (!tx.get(likeRef).exists()) return false;
+            DocumentSnapshot like = tx.get(likeRef);
+            DocumentSnapshot q = tx.get(questionRef);
+            if (!like.exists()) return false;
+
             tx.delete(likeRef);
-            tx.update(questionRef, "likeCount", FieldValue.increment(-1));
+            if (q.exists()) {   // câu hỏi đã bị xóa cứng thì chỉ dọn like
+                Long current = q.getLong("likeCount");
+                long next = Math.max(0, (current != null ? current : 0) - 1);
+                tx.update(questionRef, "likeCount", next);
+            }
             return true;
         });
     }
 
     public Task<Boolean> isQuestionLikedByUser(String questionId, String userId) {
+        if (isBlank(questionId) || isBlank(userId)) return Tasks.forResult(false);
         return db.collection(COL_LIKES)
                 .document(Like.buildId(userId, Like.TYPE_QUESTION, questionId))
                 .get()
                 .continueWith(task -> task.getResult().exists());
     }
 
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
     // ---------- Các hàm service khác gọi sang ----------
 
-    public Task<Void> increaseAnswerCount(String questionId) {   // AnswerService gọi
+    /** Tăng số câu trả lời. Thất bại (NOT_FOUND) nếu câu hỏi không tồn tại. */
+    public Task<Void> increaseAnswerCount(String questionId) {
         return db.collection(COL_QUESTIONS).document(questionId)
                 .update("answerCount", FieldValue.increment(1));
     }
 
-    public Task<Void> decreaseAnswerCount(String questionId) {   // AnswerService gọi
-        return db.collection(COL_QUESTIONS).document(questionId)
-                .update("answerCount", FieldValue.increment(-1));
+    /** Giảm số câu trả lời, không bao giờ xuống dưới 0 (dùng transaction để kẹp giá trị). */
+    public Task<Void> decreaseAnswerCount(String questionId) {
+        DocumentReference ref = db.collection(COL_QUESTIONS).document(questionId);
+        return db.runTransaction(tx -> {
+            DocumentSnapshot snap = tx.get(ref);
+            if (!snap.exists()) {
+                throw new FirebaseFirestoreException("Câu hỏi không tồn tại",
+                        FirebaseFirestoreException.Code.NOT_FOUND);
+            }
+            Long current = snap.getLong("answerCount");
+            long next = Math.max(0, (current != null ? current : 0) - 1);
+            tx.update(ref, "answerCount", next);
+            return null;
+        });
     }
-
-    public Task<Void> hideQuestion(String questionId) {          // ModerationService gọi
+    /** Ẩn câu hỏi (ModerationService gọi). Idempotent: ẩn rồi thì không làm gì thêm.
+     *  Không cho ẩn câu hỏi đã bị xóa mềm. */
+    public Task<Void> hideQuestion(String questionId) {
+        DocumentReference ref = db.collection(COL_QUESTIONS).document(questionId);
+        return db.runTransaction(tx -> {
+            DocumentSnapshot snap = tx.get(ref);
+            if (!snap.exists()) {
+                throw new FirebaseFirestoreException("Câu hỏi không tồn tại",
+                        FirebaseFirestoreException.Code.NOT_FOUND);
+            }
+            String status = snap.getString("status");
+            if (Question.STATUS_DELETED.equals(status)) {
+                throw new FirebaseFirestoreException("Câu hỏi đã bị xóa",
+                        FirebaseFirestoreException.Code.FAILED_PRECONDITION);
+            }
+            if (Question.STATUS_HIDDEN.equals(status)) return null;   // đã ẩn rồi
+            tx.update(ref, "status", Question.STATUS_HIDDEN,
+                    "updatedAt", System.currentTimeMillis());
+            return null;
+        });
+    }
+    /** Tiện cho moderation: bỏ ẩn câu hỏi. */
+    public Task<Void> unhideQuestion(String questionId) {
         return db.collection(COL_QUESTIONS).document(questionId)
-                .update("status", Question.STATUS_HIDDEN);
+                .update("status", Question.STATUS_VISIBLE,
+                        "updatedAt", System.currentTimeMillis());
     }
 }

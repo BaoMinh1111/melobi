@@ -22,10 +22,21 @@ public class NotificationService {
     public Task<DocumentReference> createNotification(String receiverId, String actorId,
                                                       String type, String targetId,
                                                       String targetType) {
-        if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
+        if (receiverId == null || receiverId.isEmpty() || receiverId.equals(actorId)) {
+            return Tasks.forResult(null);
+        }
         Notification n = new Notification(receiverId, actorId, type, targetId, targetType);
+
+        if (Notification.TYPE_LIKE.equals(type) && actorId != null) {
+            // ID cố định: like lại chỉ ghi đè thông báo cũ, không tạo thêm
+            DocumentReference ref = db.collection(COL_NOTIFICATIONS)
+                    .document(actorId + "_" + type + "_" + targetType + "_" + targetId);
+            return ref.set(n).continueWith(task -> {
+                task.getResult();   // ném lại exception nếu ghi lỗi
+                return ref;
+            });
+        }
         return db.collection(COL_NOTIFICATIONS).add(n);
-        // TODO pushFCM(n): gửi FCM cần server (Cloud Functions) - hỏi leader trước khi làm
     }
 
     /** Cần composite index (receiverId + createdAt). Lần chạy đầu Logcat sẽ in link tạo index. */
@@ -67,9 +78,6 @@ public class NotificationService {
     }
 }
 /* 1 số vấn đề nhỏ sau:
-* receiverId.equals(actorId) sẽ NPE nếu receiverId null (ví dụ caller truyền thiếu ownerId). Vì nó chạy trong listener nên app crash
--> Cách sửa: if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
-* getNotifications không giới hạn số lượng
--> Cách sửa: Thêm .limit(50)
-* markAllAsRead dùng task.getResult() mà không kiểm tra task thành công
--> Cách sửa: Thêm if (!task.isSuccessful()) throw task.getException();*/
+* hai thông báo LIKE khác nhau có thể trùng ID
+* Chống trùng mới chỉ áp dụng cho LIKE
+* Ghi đè thông báo cũ cũng đặt lại trạng thái chưa đọc*/
