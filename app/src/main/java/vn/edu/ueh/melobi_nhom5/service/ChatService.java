@@ -200,3 +200,23 @@ public class ChatService {
         }
     }
 }
+/*1 số lỗi sau:
+* Thiếu: getConversations(userId)
+* Thiếu: markAsRead(conversationId)
+* Thiếu Nhận tin nhắn theo thời gian thực: getMessages dùng get() một lần, nên người kia gửi tin thì màn hình không tự cập nhật. Cần addSnapshotListener trả về 
+ListenerRegistration, và Activity phải gỡ listener ở onStop/onDestroy
+* Bổ sung Phân trang tin nhắn: getMessages tải toàn bộ lịch sử. Cuộc trò chuyện dài sẽ chậm và tốn lượt đọc. Lấy 30-50 tin mới nhất (orderBy sentAt DESC + limit), 
+cuộn lên thì tải thêm
+* Thời gian lấy từ đồng hồ máy người dùng. new Date() dùng cho sentAt và updatedAt. Hai điện thoại lệch giờ nhau vài phút thì tin nhắn hiện sai thứ tự trong khung chat, 
+và danh sách cuộc trò chuyện sắp xếp sai. Với chat đây là lỗi dễ thấy. Dùng giờ của server (@ServerTimestamp cho Message.sentAt, FieldValue.serverTimestamp() cho 
+updatedAt)
+* Ném lỗi đồng bộ thay vì trả Task lỗi. validateId và kiểm tra “chat với chính mình”, “tin nhắn rỗng” đều throw ngay trong hàm, nên Activity phải bọc try/catch quanh 
+từng lần gọi. Các service của Nghi trả Tasks.forException(...), nên làm giống để mọi nơi xử lý lỗi bằng addOnFailureListener.
+* String.isBlank() ở validateId. Project đặt minSdk = 29, mà isBlank() chỉ có sẵn từ Android API 33, nên máy cũ có thể crash. Thay bằng id == null || id.trim().isEmpty()
+* throw task.getException() có thể ném null. Nếu task bị hủy thì getException() là null, dòng throw sẽ gây NullPointerException. Gọi task.getResult() (tự ném đúng lỗi) 
+như QuestionService đang làm.
+* lastMessage lưu nguyên văn tin nhắn. Tin dài sẽ làm document cuộc trò chuyện phình ra, mà danh sách chat chỉ cần vài chục ký tự. Cắt còn khoảng 100 ký tự khi 
+cập nhật. Đồng thời nên có giới hạn độ dài content (ví dụ 2000 ký tự).
+* Gửi tin nhắn thất bại khi mất mạng. Transaction của Firestore yêu cầu có mạng, nên sendMessage lỗi ngay khi offline. Nếu muốn tin nhắn tự gửi khi có mạng lại, thay 
+transaction bằng WriteBatch (ghi tin + cập nhật cuộc trò chuyện), vì ghi thường được Firestore xếp hàng chờ. Đổi lại sẽ mất bước kiểm tra “cuộc trò chuyện tồn tại” 
+trong transaction*/
