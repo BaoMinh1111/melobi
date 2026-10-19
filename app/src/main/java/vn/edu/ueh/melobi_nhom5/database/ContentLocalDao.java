@@ -22,6 +22,23 @@ public class ContentLocalDao {
     // Khắc phục lỗi CASCADE DELETE của CONFLICT_REPLACE
     public void saveQuestion(Question q, String syncStatus) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
+        if (DatabaseHelper.SYNC_STATUS_SYNCED.equals(syncStatus)) {
+            String query = "SELECT " + DatabaseHelper.COL_Q_SYNC_STATUS + " FROM " + DatabaseHelper.TABLE_QUESTION
+                    + " WHERE " + DatabaseHelper.COL_Q_ID + " = ?";
+            Cursor cursor = db.rawQuery(query, new String[]{q.getQuestionId()});
+            if (cursor.moveToFirst()) {
+                String currentLocalStatus = cursor.getString(0);
+                if (DatabaseHelper.SYNC_STATUS_PENDING_UPDATE.equals(currentLocalStatus) ||
+                        DatabaseHelper.SYNC_STATUS_PENDING_DELETE.equals(currentLocalStatus)) {
+                    cursor.close();
+                    return; // Dừng hàm lưu lại, bảo toàn dữ liệu offline
+                }
+            }
+            if (cursor != null && !cursor.isClosed()) {
+                cursor.close();
+            }
+        }
+
         ContentValues values = new ContentValues();
 
         values.put(DatabaseHelper.COL_Q_ID, q.getQuestionId());
@@ -142,9 +159,24 @@ public class ContentLocalDao {
     // Thuật toán Upsert -> Lưu 1 câu trả lời
    public void saveAnswer(Answer a, String syncStatus) {
        SQLiteDatabase db = dbHelper.getWritableDatabase();
-       ContentValues values = new ContentValues();
+       if (DatabaseHelper.SYNC_STATUS_SYNCED.equals(syncStatus)) {
+           String query = "SELECT " + DatabaseHelper.COL_A_SYNC_STATUS + " FROM " + DatabaseHelper.TABLE_ANSWER
+                   + " WHERE " + DatabaseHelper.COL_A_ID + " = ?";
+           Cursor cursor = db.rawQuery(query, new String[]{a.getAnswerId()});
+           if (cursor.moveToFirst()) {
+               String currentLocalStatus = cursor.getString(0);
+               if (DatabaseHelper.SYNC_STATUS_PENDING_UPDATE.equals(currentLocalStatus) ||
+                       DatabaseHelper.SYNC_STATUS_PENDING_DELETE.equals(currentLocalStatus)) {
+                   cursor.close();
+                   return; // Giữ nguyên phiên bản Local
+               }
+           }
+           if (cursor != null && !cursor.isClosed()) {
+               cursor.close();
+           }
+       }
 
-       // Đã sử dụng các Getter chuẩn hóa của lớp Answer
+       ContentValues values = new ContentValues();
        values.put(DatabaseHelper.COL_A_ID, a.getAnswerId());
        values.put(DatabaseHelper.COL_A_QUESTION_ID, a.getQuestionId());
        values.put(DatabaseHelper.COL_A_USER_ID, a.getUserId());
@@ -262,25 +294,28 @@ public class ContentLocalDao {
        return list;
    }
 
-    /* Hàm tiện ích cho Question (Helper Method) -> Tránh lặp lại code */
+    /* Hàm tiện ích cho Answer (Helper Method) -> Tránh lặp lại code */
     private List<Answer> parseAnswerListFromCursor(Cursor cursor) {
         List<Answer> list = new ArrayList<>();
         try {
             if (cursor.moveToFirst()) {
                 do {
                     Answer a = new Answer();
-                    // Đã sử dụng các Setter chuẩn hóa
                     a.setAnswerId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_ID)));
                     a.setQuestionId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_QUESTION_ID)));
                     a.setUserId(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_USER_ID)));
                     a.setContent(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_CONTENT)));
+
+                    // [ĐÃ KHẮC PHỤC]: Đọc status (Trạng thái kiểm duyệt)
                     a.setStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_STATUS)));
+
                     a.setLikeCount(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_LIKE_COUNT)));
                     a.setCommentCount(cursor.getInt(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_COMMENT_COUNT)));
                     a.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_CREATED_AT)));
 
-                    // Lấy thêm cột đồng bộ
-                    a.setStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_SYNC_STATUS)));
+                    // [ĐÃ KHẮC PHỤC LỖI NHẦM HÀM]: Đọc syncStatus (Cờ đồng bộ)
+                    a.setSyncStatus(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_SYNC_STATUS)));
+
                     a.setUserName(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_NAME)));
                     a.setUserAvatarUrl(cursor.getString(cursor.getColumnIndexOrThrow(DatabaseHelper.COL_A_AUTHOR_AVATAR)));
 
@@ -295,9 +330,3 @@ public class ContentLocalDao {
         return list;
     }
 }
- /*1 số lỗi sau:
- * ghi đè status của Answer bằng trạng thái đồng bộ. Trong parseAnswerListFromCursor: Dòng thứ hai gọi lại setStatus, nên mọi Answer đọc ra đều có 
- status = "SYNCED" thay vì VISIBLE/HIDDEN. Câu hỏi thì dùng setSyncStatus đúng, Answer thì nhầm tên hàm. Sửa thành a.setSyncStatus(...) (Answer cần có trường này)
- * dữ liệu từ Firebase ghi đè thay đổi chưa đồng bộ. saveQuestionsList và saveAnswers gọi saveQuestion(q, SYNCED), mà saveQuestion luôn update theo ID. 
- Nếu người dùng vừa sửa câu hỏi lúc offline (PENDING_UPDATE), lần kéo dữ liệu kế tiếp từ Firebase sẽ ghi đè nội dung và đặt lại trạng thái SYNCED. 
- Thay đổi offline mất vĩnh viễn, và getPendingQuestions không còn thấy nó để đẩy lên.*/

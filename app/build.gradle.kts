@@ -19,6 +19,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    useLibrary("android.test.runner")
+    useLibrary("android.test.base")
+    useLibrary("android.test.mock")
+
     buildTypes {
         release {
             optimization {

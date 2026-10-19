@@ -7,6 +7,7 @@ import java.util.List;
 public class Answer implements Serializable {
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_HIDDEN = "HIDDEN";
+    public static final String STATUS_SYNCED = "SYNCED";
 
     private String answerId;
     private String questionId;
@@ -20,6 +21,7 @@ public class Answer implements Serializable {
     private long commentCount;
     private List<String> likedUserIds;
     private String status;
+    private String syncStatus = STATUS_SYNCED;
 
     public Answer() {
         this.likedUserIds = new ArrayList<>();
@@ -167,5 +169,13 @@ public class Answer implements Serializable {
 
     public void hideAnswer() {
         this.status = STATUS_HIDDEN;
+    }
+
+    public String getSyncStatus() {
+        return syncStatus;
+    }
+
+    public void setSyncStatus(String syncStatus) {
+        this.syncStatus = syncStatus;
     }
 }

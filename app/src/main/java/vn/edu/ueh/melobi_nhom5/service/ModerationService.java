@@ -1,7 +1,12 @@
 package vn.edu.ueh.melobi_nhom5.service;
 
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.Transaction;
 import java.util.UUID;
 import vn.edu.ueh.melobi_nhom5.entity.Report;
 
@@ -21,12 +26,60 @@ public class ModerationService {
      * Theo thiết kế, hàm cần nhận: reporterId, targetId, targetType, reason
      */
     public Task<Void> submitReport(String reporterId, String targetId, String targetType, String reason) {
-        // Khởi tạo đối tượng Report.
-        // Lớp Report đã để TỰ ĐỘNG sinh ra ID, trạng thái PENDING và Thời gian.
-        Report newReport = new Report(reporterId, targetId, targetType, reason);
-        // Đẩy lên Firebase Firestore.
-        // Dùng getReportId() đã được tự động tạo để làm tên của Document
-        return db.collection(COLLECTION_REPORTS).document(newReport.getReportId()).set(newReport);
+        if (reporterId == null || reporterId.trim().isEmpty()) {
+            return Tasks.<Void>forException(new IllegalArgumentException("ID người báo cáo không hợp lệ"));
+        }
+        if (targetId == null || targetId.trim().isEmpty()) {
+            return Tasks.<Void>forException(new IllegalArgumentException("ID đối tượng bị báo cáo không hợp lệ"));
+        }
+        if (reason == null || reason.trim().isEmpty()) {
+            return Tasks.<Void>forException(new IllegalArgumentException("Lý do báo cáo không được để trống"));
+        }
+
+        // Đảm bảo targetType chỉ nằm trong 3 loại được quy định
+        if (!Report.TARGET_TYPE_QUESTION.equals(targetType) &&
+                !Report.TARGET_TYPE_ANSWER.equals(targetType) &&
+                !Report.TARGET_TYPE_USER.equals(targetType)) {
+            return Tasks.<Void>forException(new IllegalArgumentException("Loại đối tượng báo cáo không hợp lệ"));
+        }
+
+        if (Report.TARGET_TYPE_USER.equals(targetType) && reporterId.equals(targetId)) {
+            return Tasks.<Void>forException(new IllegalStateException("Bạn không thể tự báo cáo chính mình"));
+        }
+
+        // Cấu trúc ID: reporterId_targetType_targetId
+        String compositeReportId = reporterId + "_" + targetType + "_" + targetId;
+
+        DocumentReference reportRef = db.collection(COLLECTION_REPORTS).document(compositeReportId);
+
+        // runTransaction giúp khóa (lock) document trên server để kiểm tra trước khi ghi
+        return db.runTransaction(new Transaction.Function<Void>() {
+            @Override
+            public Void apply(Transaction transaction) throws FirebaseFirestoreException {
+                // Đọc dữ liệu hiện tại từ Firebase
+                DocumentSnapshot snapshot = transaction.get(reportRef);
+
+                if (snapshot.exists()) {
+                    // Nếu báo cáo đã tồn tại, lập tức ngắt Transaction và ném ra lỗi.
+                    // Điều này bảo vệ các báo cáo đã bị xử lý (RESOLVED/IGNORED) khỏi việc bị đưa về PENDING
+                    throw new FirebaseFirestoreException(
+                            "Bạn đã gửi báo cáo cho nội dung này rồi. Vui lòng chờ quản trị viên xử lý.",
+                            FirebaseFirestoreException.Code.ALREADY_EXISTS
+                    );
+                }
+
+                // Nếu chưa tồn tại, khởi tạo đối tượng Report mới
+                Report newReport = new Report(reporterId, targetId, targetType, reason);
+
+                // Ghi đè lại cái UUID ngẫu nhiên bằng Khóa phức hợp ta vừa tạo
+                newReport.setReportId(compositeReportId);
+
+                // Đẩy dữ liệu lên
+                transaction.set(reportRef, newReport);
+
+                return null; // Giao dịch thành công
+            }
+        });
     }
 
     /**
@@ -61,10 +114,3 @@ public class ModerationService {
         // TODO: Cập nhật status của User thành "ACTIVE"
     }
 }
-/*lỗi trong submitReport:
-* Không chặn báo cáo trùng và tự báo cáo mình. Mỗi lần bấm gửi tạo thêm một document (ID là UUID ngẫu nhiên), nên một người báo cáo cùng một bài 50 lần 
-sẽ ra 50 báo cáo. Đặt ID theo reporterId_targetType_targetId để mỗi người chỉ báo cáo một nội dung một lần, và chặn trường hợp người dùng báo cáo chính mình 
-(reporterId.equals(targetId) khi targetType = USER).
-* Gửi lại báo cáo sẽ ghi đè báo cáo đã xử lý. Nếu dùng ID cố định mà gọi set(), báo cáo đã RESOLVED sẽ bị đặt lại PENDING. Cần kiểm tra trước 
-(trong transaction) rằng document chưa tồn tại.
-* Không kiểm tra đầu vào. reason rỗng, targetType ngoài {QUESTION, ANSWER, USER}, hoặc reporterId null đều được ghi thẳng lên Firestore.*/

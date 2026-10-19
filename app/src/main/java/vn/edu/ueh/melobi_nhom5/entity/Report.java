@@ -1,7 +1,19 @@
 package vn.edu.ueh.melobi_nhom5.entity;
 
+import java.io.Serializable;
 import java.util.UUID;
-public class Report {
+public class Report implements Serializable {
+
+    // Các loại đối tượng có thể bị báo cáo (Target Types)
+    public static final String TARGET_TYPE_QUESTION = "QUESTION";
+    public static final String TARGET_TYPE_ANSWER = "ANSWER";
+    public static final String TARGET_TYPE_USER = "USER";
+
+    // Các trạng thái của một báo cáo
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_RESOLVED = "RESOLVED";
+    public static final String STATUS_IGNORED = "IGNORED";
+
     private String reportId;
     private String reporterId;
     private String targetId;
@@ -21,37 +33,30 @@ public class Report {
         this.targetId = targetId;
         this.targetType = targerType;
         this.reason = reason;
-        this.status = "PENDING...";     //Báo cáo mới mặc định ở trạng thái chờ xử lý
+        this.status = STATUS_PENDING;     //Báo cáo mới mặc định ở trạng thái chờ xử lý
         this.createdAt = System.currentTimeMillis();
     }
 
     public String getReportId() {return reportId; }
     public void setReportId(String reportId) {this.reportId = reportId; }
 
-    public String getReporterId(String reportId) {return reporterId; }
-    public void setReporterId() {this.reporterId = reporterId; }
+    public String getReporterId() {return reporterId; }
+    public void setReporterId(String reporterId) {this.reporterId = reporterId; }
 
     public String getTargetId() {return targetId; }
-    public void setTargetId() {this.targetId = targetId; }
+    public void setTargetId(String targetId) {this.targetId = targetId; }
 
     public String getTargetType() {return targetType; }
-    public void setTargetType() {this.targetType = targetType; }
+    public void setTargetType(String targetType) {this.targetType = targetType; }
 
     public String getReason() {return reason; }
-    public void setReason() {this.reason = reason; }
+    public void setReason(String reason) {this.reason = reason; }
 
     public String getStatus() {return status; }
-    public void setStatus() {this.status = status; }
+    public void setStatus(String status) {this.status = status; }
 
     public long getCreatedAt() {return createdAt; }
     public void setCreatedAt(long createdAt) {this.createdAt = createdAt; }
 
 }
-/*1 số lỗi:
-* status = "PENDING..." (có 3 dấu chấm) 
--> Ảnh hưởng đến ModerationService: getReports("PENDING") không tìm thấy báo cáo nào, vì giá trị lưu là "PENDING...". Admin luôn thấy danh sách rỗng
-* setReporterId(), setTargetId(), setTargetType(), setReason(), setStatus() không có tham số
--> Ảnh hưởng đến ModerationService: Đọc Report từ Firestore (toObject) ra các trường này đều null
-* getReporterId(String reportId) có tham số thừa
--> Ảnh hưởng đến ModerationService: Firestore không nhận đây là getter, nên reporterId không được ghi lên Firestore
-* Không có hằng số targetType, status*/
+

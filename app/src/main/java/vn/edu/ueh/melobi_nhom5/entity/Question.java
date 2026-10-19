@@ -1,6 +1,8 @@
 package vn.edu.ueh.melobi_nhom5.entity;
 
 public class Question {
+    public static final String STATUS_VISIBLE = "VISIBLE";
+    public static final String STATUS_HIDDEN = "HIDDEN";
     private String questionId;
     private String userId;
     private String majorId;
