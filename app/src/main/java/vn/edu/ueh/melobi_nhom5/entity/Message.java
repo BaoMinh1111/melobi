@@ -2,7 +2,7 @@
 package vn.edu.ueh.melobi_nhom5.entity;
 
 import java.util.Date;
-
+import com.google.firebase.firestore.PropertyName;
 public class Message {
 
     // Khai bao cac thuoc tinh
@@ -74,10 +74,12 @@ public class Message {
         this.sentAt = sentAt;
     }
 
+    @PropertyName("isRead")
     public boolean getIsRead() {
         return isRead;
     }
 
+    @PropertyName("isRead")
     public void setIsRead(boolean isRead) {
         this.isRead = isRead;
     }

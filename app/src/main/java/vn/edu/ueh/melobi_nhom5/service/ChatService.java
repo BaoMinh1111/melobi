@@ -12,6 +12,12 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.WriteBatch;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import vn.edu.ueh.melobi_nhom5.entity.Conversation;
 import vn.edu.ueh.melobi_nhom5.entity.Message;
@@ -190,6 +196,154 @@ public class ChatService {
 
                     return messages;
                 });
+    }
+
+    // Lay cac cuoc tro chuyen cua mot nguoi dung
+    public Task<List<Conversation>> getConversations(String userId) {
+        validateId(userId);
+
+        Task<QuerySnapshot> first = db
+                .collection("conversations")
+                .whereEqualTo("userId1", userId)
+                .get();
+
+        Task<QuerySnapshot> second = db
+                .collection("conversations")
+                .whereEqualTo("userId2", userId)
+                .get();
+
+        Task<List<QuerySnapshot>> combined =
+                Tasks.whenAllSuccess(first, second);
+
+        return combined.continueWith(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+
+            Map<String, Conversation> unique =
+                    new LinkedHashMap<>();
+
+            for (QuerySnapshot snapshot : task.getResult()) {
+                for (DocumentSnapshot doc :
+                        snapshot.getDocuments()) {
+
+                    Conversation conversation =
+                            doc.toObject(Conversation.class);
+
+                    if (conversation != null) {
+                        conversation.setConversationId(doc.getId());
+                        unique.put(doc.getId(), conversation);
+                    }
+                }
+            }
+
+            List<Conversation> result =
+                    new ArrayList<>(unique.values());
+
+            // Cuoc tro chuyen moi nhat o tren
+            result.sort((a, b) -> {
+                long timeA = a.getUpdatedAt() == null
+                        ? 0L : a.getUpdatedAt().getTime();
+
+                long timeB = b.getUpdatedAt() == null
+                        ? 0L : b.getUpdatedAt().getTime();
+
+                return Long.compare(timeB, timeA);
+            });
+
+            return result;
+        });
+    }
+
+    // Danh dau tin nhan da doc cho nguoi nhan
+    public Task<Void> markAsRead(
+            String conversationId,
+            String readerId) {
+
+        validateId(conversationId);
+        validateId(readerId);
+
+        DocumentReference conversationRef = db
+                .collection("conversations")
+                .document(conversationId);
+
+        // Kiem tra nguoi doc co thuoc conversation
+        return conversationRef.get().continueWithTask(convTask -> {
+            if (!convTask.isSuccessful()) {
+                throw convTask.getException();
+            }
+
+            Conversation conversation =
+                    convTask.getResult().toObject(Conversation.class);
+
+            if (conversation == null) {
+                throw new IllegalArgumentException(
+                        "Conversation khong ton tai"
+                );
+            }
+
+            boolean isMember =
+                    readerId.equals(conversation.getUserId1())
+                            || readerId.equals(conversation.getUserId2());
+
+            if (!isMember) {
+                throw new IllegalArgumentException(
+                        "Nguoi doc khong thuoc conversation"
+                );
+            }
+
+            return conversationRef.collection("messages")
+                    .whereEqualTo("isRead", false)
+                    .get()
+                    .continueWithTask(messageTask -> {
+
+                        if (!messageTask.isSuccessful()) {
+                            throw messageTask.getException();
+                        }
+
+                        List<Task<Void>> commits = new ArrayList<>();
+                        WriteBatch batch = db.batch();
+                        int pending = 0;
+
+                        for (DocumentSnapshot doc :
+                                messageTask.getResult().getDocuments()) {
+
+                            String senderId =
+                                    doc.getString("senderId");
+
+                            // Khong danh dau tin cua chinh minh
+                            if (senderId == null
+                                    || readerId.equals(senderId)) {
+                                continue;
+                            }
+
+                            batch.update(
+                                    doc.getReference(),
+                                    "isRead",
+                                    true
+                            );
+
+                            pending++;
+
+                            // Chia batch de tranh vuot gioi han
+                            if (pending == 400) {
+                                commits.add(batch.commit());
+                                batch = db.batch();
+                                pending = 0;
+                            }
+                        }
+
+                        if (pending > 0) {
+                            commits.add(batch.commit());
+                        }
+
+                        if (commits.isEmpty()) {
+                            return Tasks.forResult(null);
+                        }
+
+                        return Tasks.whenAll(commits);
+                    });
+        });
     }
 
     private void validateId(String id) {
