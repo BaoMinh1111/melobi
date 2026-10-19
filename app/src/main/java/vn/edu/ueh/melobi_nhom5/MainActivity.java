@@ -2,6 +2,7 @@ package vn.edu.ueh.melobi_nhom5;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Build;
 import android.util.Log;
 import android.view.View;
 import android.view.MenuItem;
@@ -15,10 +16,16 @@ import android.text.TextWatcher;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.net.ConnectivityManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
+
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -44,6 +51,7 @@ import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
 import vn.edu.ueh.melobi_nhom5.service.NotificationService;
 import vn.edu.ueh.melobi_nhom5.model.QuestionPage;
 import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.NotificationWatcher;
 
 /**
  * Feed câu hỏi: tải theo trang (QuestionService.getQuestions / filterByCategory),
@@ -55,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     private static final int PAGE_SIZE = 10;
     private static final String CATEGORY_ALL = "Tất cả";
     private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private NotificationWatcher notificationWatcher;
+    private final ActivityResultLauncher<String> notifPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> { });
     private User currentUser;
     private QuestionService questionService;
     private QuestionAdapter questionAdapter;
@@ -122,7 +133,8 @@ public class MainActivity extends AppCompatActivity {
 
         AuthHelper.ensureAuth(() -> {
             loadFirstPage();
-            refreshNotificationBadge();
+            refreshNotificationBadge();          // nếu bạn đã làm nút chuông
+            startNotificationWatcher();
         });
         networkCallback = NetworkUtils.registerNetworkListener(() -> runOnUiThread(() -> {
             if (showingCache && !isFinishing() && !isDestroyed()) loadFirstPage();
@@ -376,5 +388,15 @@ public class MainActivity extends AppCompatActivity {
             ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
             if (cm != null) cm.unregisterNetworkCallback(networkCallback);
         }
+        if (notificationWatcher != null) notificationWatcher.stop();
+    }
+    private void startNotificationWatcher() {
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) return;   // không có đăng nhập thật thì thôi
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);   // Android 13+ phải xin quyền
+        }
+        if (notificationWatcher == null) notificationWatcher = new NotificationWatcher(getApplicationContext());
+        notificationWatcher.start(AuthHelper.getCurrentUserId());
     }
 }
