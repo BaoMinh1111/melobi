@@ -6,8 +6,12 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.Transaction;
-import java.util.UUID;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import vn.edu.ueh.melobi_nhom5.entity.Report;
 
 public class ModerationService {
@@ -22,7 +26,7 @@ public class ModerationService {
     }
 
     /**
-     * 1. HÀM DÀNH CHO USER: Gửi báo cáo vi phạm
+     * HÀM DÀNH CHO USER: Gửi báo cáo vi phạm với cơ chế Bảo mật và Toàn vẹn dữ liệu
      * Theo thiết kế, hàm cần nhận: reporterId, targetId, targetType, reason
      */
     public Task<Void> submitReport(String reporterId, String targetId, String targetType, String reason) {
@@ -43,6 +47,7 @@ public class ModerationService {
             return Tasks.<Void>forException(new IllegalArgumentException("Loại đối tượng báo cáo không hợp lệ"));
         }
 
+        // Chặn tự báo cáo mình
         if (Report.TARGET_TYPE_USER.equals(targetType) && reporterId.equals(targetId)) {
             return Tasks.<Void>forException(new IllegalStateException("Bạn không thể tự báo cáo chính mình"));
         }
@@ -61,7 +66,6 @@ public class ModerationService {
 
                 if (snapshot.exists()) {
                     // Nếu báo cáo đã tồn tại, lập tức ngắt Transaction và ném ra lỗi.
-                    // Điều này bảo vệ các báo cáo đã bị xử lý (RESOLVED/IGNORED) khỏi việc bị đưa về PENDING
                     throw new FirebaseFirestoreException(
                             "Bạn đã gửi báo cáo cho nội dung này rồi. Vui lòng chờ quản trị viên xử lý.",
                             FirebaseFirestoreException.Code.ALREADY_EXISTS
@@ -83,10 +87,35 @@ public class ModerationService {
     }
 
     /**
-     * Admin xem danh sách báo cáo theo trạng thái (PENDING, RESOLVED...)
+     * HÀM DÀNH CHO ADMIN: Xem danh sách báo cáo theo trạng thái (PENDING, RESOLVED...)
      */
-    public void getReports(String status) {
-        // TODO: Viết logic truy vấn Firebase lấy danh sách report có status tương ứng
+    public Task<List<Report>> getReports(String status) {
+        // Kiểm tra đầu vào an toàn
+        if (status == null || status.trim().isEmpty()) {
+            return Tasks.forException(new IllegalArgumentException("Trạng thái không được để trống"));
+        }
+
+        // Truy vấn Firestore: Lọc theo status và sắp xếp theo thời gian mới nhất
+        return db.collection(COLLECTION_REPORTS)
+                .whereEqualTo("status", status)
+                .orderBy("createdAt", Query.Direction.DESCENDING) // Sắp xếp từ mới đến cũ
+                .get()
+                .continueWith(task -> {
+                    if (task.isSuccessful() && task.getResult() != null) {
+                        // Chuyển đổi QuerySnapshot thành List<Report>
+                        List<Report> reportList = new ArrayList<>();
+                        for (DocumentSnapshot doc : task.getResult()) {
+                            Report report = doc.toObject(Report.class);
+                            if (report != null) {
+                                reportList.add(report);
+                            }
+                        }
+                        return reportList; // Trả về danh sách
+                    } else {
+                        // Nếu có lỗi, ném lỗi ra ngoài
+                        throw task.getException() != null ? task.getException() : new Exception("Lỗi không xác định khi lấy reports");
+                    }
+                });
     }
 
     /**

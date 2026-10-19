@@ -329,4 +329,12 @@ public class ContentLocalDao {
         }
         return list;
     }
+
+    public List<Answer> getPendingAnswers() {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+        String query = "SELECT * FROM " + DatabaseHelper.TABLE_ANSWER
+                + " WHERE " + DatabaseHelper.COL_A_SYNC_STATUS + " != ?";
+        Cursor cursor = db.rawQuery(query, new String[]{DatabaseHelper.SYNC_STATUS_SYNCED});
+        return parseAnswerListFromCursor(cursor);
+    }
 }
