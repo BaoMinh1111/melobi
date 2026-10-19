@@ -56,14 +56,13 @@ public class NotificationService {
     }
 
     public Task<Void> markAsRead(String notificationId) {
-        return db.collection(COL_NOTIFICATIONS).document(notificationId)
-                .update("isRead", true);
+        if (notificationId == null || notificationId.isEmpty()) {
+            return Tasks.forException(new IllegalArgumentException("notificationId không hợp lệ"));
+        }
+        return db.collection(COL_NOTIFICATIONS).document(notificationId).update("isRead", true);
     }
 
     public Task<Void> markAllAsRead(String userId) {
-        if (userId == null || userId.isEmpty()) {
-            return Tasks.forException(new IllegalArgumentException("userId không hợp lệ"));
-        }
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
                 .whereEqualTo("isRead", false)
