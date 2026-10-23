@@ -24,7 +24,9 @@ public final class NetworkUtils {
      */
     public static NetworkCallback registerNetworkListener() {
         return registerNetworkListener(() -> {
-            // SyncManager.syncAll() sẽ được gọi tại đây khi lớp đó đã có trong project.
+            if (appContext != null) {
+                SyncManager.getInstance(appContext).syncAll();
+            }
         });
     }
 
@@ -54,7 +56,8 @@ public final class NetworkUtils {
             return false;
         }
 
-        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
                 || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
                 || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
                 || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN);

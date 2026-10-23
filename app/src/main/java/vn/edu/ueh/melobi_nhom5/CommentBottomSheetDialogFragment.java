@@ -102,12 +102,25 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
         commentAdapter = new CommentAdapter(currentUser.getId(), new CommentAdapter.OnCommentActionListener() {
             @Override
             public void onEditClick(Comment comment) {
+                if (!isOwnComment(comment)) {
+                    Toast.makeText(getContext(), R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 showEditCommentDialog(comment);
             }
 
             @Override
             public void onDeleteClick(Comment comment) {
+                if (!isOwnComment(comment)) {
+                    Toast.makeText(getContext(), R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 confirmDeleteComment(comment);
+            }
+
+            @Override
+            public void onAuthorClick(Comment comment) {
+                ProfileActivity.openProfile(requireContext(), comment.getUserId(), comment.getUserName());
             }
         });
 
@@ -182,6 +195,12 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
                 Toast.makeText(getContext(), "Thêm bình luận thất bại: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private boolean isOwnComment(Comment comment) {
+        return currentUser != null && comment != null
+                && currentUser.getId() != null
+                && currentUser.getId().equals(comment.getUserId());
     }
 
     private void showEditCommentDialog(Comment comment) {

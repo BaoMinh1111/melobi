@@ -21,11 +21,21 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
         void onQuestionClick(Question question);
     }
 
+    public interface OnAuthorClickListener {
+        void onAuthorClick(Question question);
+    }
+
     private final List<Question> questionList = new ArrayList<>();
     private final OnQuestionClickListener listener;
+    private final OnAuthorClickListener authorClickListener;
 
     public QuestionAdapter(OnQuestionClickListener listener) {
+        this(listener, null);
+    }
+
+    public QuestionAdapter(OnQuestionClickListener listener, OnAuthorClickListener authorClickListener) {
         this.listener = listener;
+        this.authorClickListener = authorClickListener;
     }
 
     public void setQuestions(List<Question> newQuestions) {
@@ -54,7 +64,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
     @Override
     public void onBindViewHolder(@NonNull QuestionViewHolder holder, int position) {
         Question question = questionList.get(position);
-        holder.bind(question, listener);
+        holder.bind(question, listener, authorClickListener);
     }
 
     @Override
@@ -63,6 +73,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
     }
 
     static class QuestionViewHolder extends RecyclerView.ViewHolder {
+        private final TextView tvMainAvatar;
         private final TextView tvMainCategory;
         private final TextView tvMainAnswerCount;
         private final TextView tvMainTitle;
@@ -72,6 +83,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
 
         public QuestionViewHolder(@NonNull View itemView) {
             super(itemView);
+            tvMainAvatar = itemView.findViewById(R.id.tvMainAvatar);
             tvMainCategory = itemView.findViewById(R.id.tvMainCategory);
             tvMainAnswerCount = itemView.findViewById(R.id.tvMainAnswerCount);
             tvMainTitle = itemView.findViewById(R.id.tvMainTitle);
@@ -80,7 +92,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             tvMainTime = itemView.findViewById(R.id.tvMainTime);
         }
 
-        public void bind(Question question, OnQuestionClickListener listener) {
+        public void bind(Question question, OnQuestionClickListener listener, OnAuthorClickListener authorClickListener) {
             tvMainCategory.setText(question.getCategory() != null ? question.getCategory() : "Khác");
             tvMainAnswerCount.setText(question.getAnswerCount() + " câu trả lời");
             tvMainTitle.setText(question.getTitle());
@@ -94,7 +106,16 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             );
             String authorName = question.getUserName() != null ? question.getUserName() : "Thành viên";
             tvMainAuthorName.setText(authorName);
+            tvMainAvatar.setText(authorName.substring(0, 1).toUpperCase());
             tvMainTime.setText(relativeTime);
+
+            View.OnClickListener openAuthor = v -> {
+                if (authorClickListener != null) {
+                    authorClickListener.onAuthorClick(question);
+                }
+            };
+            tvMainAvatar.setOnClickListener(openAuthor);
+            tvMainAuthorName.setOnClickListener(openAuthor);
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {

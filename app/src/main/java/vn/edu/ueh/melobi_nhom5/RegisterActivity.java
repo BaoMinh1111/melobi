@@ -22,6 +22,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.RecaptchaHelper;
 
 public class RegisterActivity extends AppCompatActivity {
 
@@ -133,20 +134,49 @@ public class RegisterActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.error_password_mismatch, Toast.LENGTH_SHORT).show();
             return;
         }
-
         setLoading(true);
+        RecaptchaHelper.verify(this, new RecaptchaHelper.Callback() {
+            @Override
+            public void onSuccess(String token) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                performRegister(email, password, fullName, selectedMajor);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                setLoading(false);
+                Toast.makeText(RegisterActivity.this, R.string.error_recaptcha_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void performRegister(String email, String password, String fullName, Major selectedMajor) {
         userService.register(email, password, fullName, new UserService.Callback<User>() {
             @Override
             public void onSuccess(User result) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
                 userService.updateMajor(result.getUserId(), selectedMajor.getMajorId(), new UserService.Callback<Void>() {
                     @Override
                     public void onSuccess(Void ignored) {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
                         Toast.makeText(RegisterActivity.this, R.string.message_register_success, Toast.LENGTH_SHORT).show();
                         openMainAndFinish();
                     }
 
                     @Override
                     public void onError(Exception e) {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
                         setLoading(false);
                         Toast.makeText(RegisterActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -155,6 +185,9 @@ public class RegisterActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
                 setLoading(false);
                 Toast.makeText(RegisterActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
             }

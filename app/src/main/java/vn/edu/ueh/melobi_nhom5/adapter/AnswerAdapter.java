@@ -25,6 +25,8 @@ public class AnswerAdapter extends RecyclerView.Adapter<AnswerAdapter.AnswerView
         void onCommentClick(Answer answer);
         void onEditClick(Answer answer);
         void onDeleteClick(Answer answer);
+        default void onAuthorClick(Answer answer) {
+        }
     }
 
     private final List<Answer> answerList = new ArrayList<>();
@@ -144,6 +146,12 @@ public class AnswerAdapter extends RecyclerView.Adapter<AnswerAdapter.AnswerView
             btnDelete.setOnClickListener(v -> {
                 if (listener != null) listener.onDeleteClick(answer);
             });
+
+            View.OnClickListener openAuthor = v -> {
+                if (listener != null) listener.onAuthorClick(answer);
+            };
+            tvAvatarPlaceholder.setOnClickListener(openAuthor);
+            tvAuthorName.setOnClickListener(openAuthor);
         }
     }
 }

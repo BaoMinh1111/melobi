@@ -9,12 +9,14 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.List;
 
@@ -31,16 +33,20 @@ public class ChatActivity extends AppCompatActivity {
     public static final String EXTRA_CONVERSATION_ID = "extra_conversation_id";
     public static final String EXTRA_OTHER_USER_ID = "extra_other_user_id";
     public static final String EXTRA_OTHER_USER_NAME = "extra_other_user_name";
+    private static final String STATE_CONVERSATION_ID = "state_conversation_id";
+    private static final String STATE_OTHER_USER_ID = "state_other_user_id";
+    private static final String STATE_OTHER_USER_NAME = "state_other_user_name";
+    private static final String STATE_DRAFT = "state_draft";
 
     private ChatService chatService;
     private UserService userService;
     private MessageAdapter messageAdapter;
+    private ListenerRegistration messagesListener;
     private String currentUserId;
     private String conversationId;
     private String otherUserId;
     private String otherUserName;
     private boolean sending;
-    private boolean skipNextResumeLoad;
 
     private MaterialToolbar toolbarChat;
     private RecyclerView rvMessages;
@@ -69,6 +75,7 @@ public class ChatActivity extends AppCompatActivity {
         conversationId = getIntent().getStringExtra(EXTRA_CONVERSATION_ID);
         otherUserId = getIntent().getStringExtra(EXTRA_OTHER_USER_ID);
         otherUserName = getIntent().getStringExtra(EXTRA_OTHER_USER_NAME);
+        restoreChatState(savedInstanceState);
 
         if ((conversationId == null || conversationId.trim().isEmpty())
                 && (otherUserId == null || otherUserId.trim().isEmpty())) {
@@ -99,20 +106,49 @@ public class ChatActivity extends AppCompatActivity {
         rvMessages.setAdapter(messageAdapter);
 
         btnSendMessage.setOnClickListener(v -> sendMessage());
-        skipNextResumeLoad = true;
+        if (savedInstanceState != null) {
+            String draft = savedInstanceState.getString(STATE_DRAFT);
+            if (draft != null) {
+                etMessageInput.setText(draft);
+            }
+        }
         loadPartnerName();
-        ensureConversationThenLoad();
+        ensureConversationThenListen();
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        if (skipNextResumeLoad) {
-            skipNextResumeLoad = false;
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_CONVERSATION_ID, conversationId);
+        outState.putString(STATE_OTHER_USER_ID, otherUserId);
+        outState.putString(STATE_OTHER_USER_NAME, otherUserName);
+        if (etMessageInput != null && etMessageInput.getText() != null) {
+            outState.putString(STATE_DRAFT, etMessageInput.getText().toString());
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        removeMessagesListener();
+        super.onDestroy();
+    }
+
+    private void restoreChatState(Bundle savedInstanceState) {
+        if (savedInstanceState == null) {
             return;
         }
-        if (chatService != null && conversationId != null && !conversationId.trim().isEmpty()) {
-            markAsReadAndLoadMessages();
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            conversationId = savedInstanceState.getString(STATE_CONVERSATION_ID);
+        }
+        if (otherUserId == null || otherUserId.trim().isEmpty()) {
+            otherUserId = savedInstanceState.getString(STATE_OTHER_USER_ID);
+        }
+        if (otherUserName == null || otherUserName.trim().isEmpty()) {
+            otherUserName = savedInstanceState.getString(STATE_OTHER_USER_NAME);
+        }
+        String draft = savedInstanceState.getString(STATE_DRAFT);
+        if (draft != null && etMessageInput != null) {
+            etMessageInput.setText(draft);
         }
     }
 
@@ -143,28 +179,34 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
-    private void ensureConversationThenLoad() {
-        if (conversationId != null && !conversationId.trim().isEmpty()) {
-            markAsReadAndLoadMessages();
+    private void ensureConversationThenListen() {
+        if (otherUserId != null && !otherUserId.trim().isEmpty()) {
+            pbChatLoading.setVisibility(View.VISIBLE);
+            chatService.createConversation(currentUserId, otherUserId)
+                    .addOnSuccessListener(conversation -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        applyConversation(conversation);
+                        startMessagesListener();
+                    })
+                    .addOnFailureListener(e -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        pbChatLoading.setVisibility(View.GONE);
+                        Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
             return;
         }
 
-        pbChatLoading.setVisibility(View.VISIBLE);
-        chatService.createConversation(currentUserId, otherUserId)
-                .addOnSuccessListener(conversation -> {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    applyConversation(conversation);
-                    markAsReadAndLoadMessages();
-                })
-                .addOnFailureListener(e -> {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    pbChatLoading.setVisibility(View.GONE);
-                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
+        if (conversationId != null && !conversationId.trim().isEmpty()) {
+            startMessagesListener();
+            return;
+        }
+
+        Toast.makeText(this, "Không tìm thấy cuộc trò chuyện", Toast.LENGTH_SHORT).show();
+        finish();
     }
 
     private void applyConversation(Conversation conversation) {
@@ -180,37 +222,33 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
-    private void markAsReadAndLoadMessages() {
+    private void startMessagesListener() {
         if (conversationId == null || conversationId.trim().isEmpty()) {
             return;
         }
-
+        removeMessagesListener();
         pbChatLoading.setVisibility(View.VISIBLE);
-        chatService.markAsRead(conversationId)
-                .addOnCompleteListener(ignored -> loadMessages());
+        messagesListener = chatService.listenMessages(conversationId, (snapshot, error) -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            pbChatLoading.setVisibility(View.GONE);
+            if (error != null) {
+                tvChatEmpty.setVisibility(View.VISIBLE);
+                Toast.makeText(this, error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            List<Message> messages = ChatService.mapMessages(snapshot);
+            bindMessages(messages);
+            chatService.markAsRead(conversationId);
+        });
     }
 
-    private void loadMessages() {
-        if (conversationId == null || conversationId.trim().isEmpty()) {
-            return;
+    private void removeMessagesListener() {
+        if (messagesListener != null) {
+            messagesListener.remove();
+            messagesListener = null;
         }
-
-        chatService.getMessages(conversationId)
-                .addOnSuccessListener(messages -> {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    pbChatLoading.setVisibility(View.GONE);
-                    bindMessages(messages);
-                })
-                .addOnFailureListener(e -> {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    pbChatLoading.setVisibility(View.GONE);
-                    tvChatEmpty.setVisibility(View.VISIBLE);
-                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
     }
 
     private void bindMessages(List<Message> messages) {
@@ -239,17 +277,20 @@ public class ChatActivity extends AppCompatActivity {
 
         sending = true;
         btnSendMessage.setEnabled(false);
+        etMessageInput.setText("");
         chatService.sendMessage(conversationId, currentUserId, content)
-                .addOnSuccessListener(message -> {
-                    sending = false;
-                    btnSendMessage.setEnabled(true);
-                    etMessageInput.setText("");
-                    loadMessages();
-                })
                 .addOnFailureListener(e -> {
-                    sending = false;
-                    btnSendMessage.setEnabled(true);
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    etMessageInput.setText(content);
                     Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                })
+                .addOnCompleteListener(task -> {
+                    sending = false;
+                    if (!isFinishing() && !isDestroyed()) {
+                        btnSendMessage.setEnabled(true);
+                    }
                 });
     }
 

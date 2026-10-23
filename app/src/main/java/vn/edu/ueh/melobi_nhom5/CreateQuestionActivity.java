@@ -28,6 +28,12 @@ import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 /** Màn hình đăng câu hỏi mới. Đăng xong sẽ mở thẳng QuestionDetailActivity của câu hỏi đó. */
 public class CreateQuestionActivity extends AppCompatActivity {
 
+    public static final String EXTRA_EDIT_QUESTION_ID = "extra_edit_question_id";
+    public static final String EXTRA_EDIT_TITLE = "extra_edit_title";
+    public static final String EXTRA_EDIT_CONTENT = "extra_edit_content";
+    public static final String EXTRA_EDIT_MAJOR_ID = "extra_edit_major_id";
+    public static final String EXTRA_EDIT_IMAGE_URL = "extra_edit_image_url";
+
     private static final int TITLE_MIN = 10;
     private static final int TITLE_MAX = 150;
     private static final int CONTENT_MIN = 20;
@@ -37,6 +43,9 @@ public class CreateQuestionActivity extends AppCompatActivity {
     private ArrayAdapter<Major> majorAdapter;
     private User currentUser;
     private Major selectedMajor;             // null cho tới khi người dùng chọn
+    private String editQuestionId;
+    private String editImageUrl;
+    private String pendingMajorId;
 
     private MaterialToolbar toolbar;
     private TextInputLayout tilTitle, tilContent, tilMajor;
@@ -58,12 +67,32 @@ public class CreateQuestionActivity extends AppCompatActivity {
         }
         questionService = new QuestionService();
         majorService = new MajorService();
+        editQuestionId = getIntent().getStringExtra(EXTRA_EDIT_QUESTION_ID);
+        editImageUrl = getIntent().getStringExtra(EXTRA_EDIT_IMAGE_URL);
+        pendingMajorId = getIntent().getStringExtra(EXTRA_EDIT_MAJOR_ID);
 
         initViews();
         setupMajorDropdown();
+        bindEditMode();
 
         toolbar.setNavigationOnClickListener(v -> finish());
         btnPost.setOnClickListener(v -> submitQuestion());
+    }
+
+    private void bindEditMode() {
+        if (editQuestionId == null || editQuestionId.trim().isEmpty()) {
+            return;
+        }
+        toolbar.setTitle(R.string.title_edit_question);
+        btnPost.setText(R.string.action_edit);
+        String title = getIntent().getStringExtra(EXTRA_EDIT_TITLE);
+        String content = getIntent().getStringExtra(EXTRA_EDIT_CONTENT);
+        if (title != null) {
+            etTitle.setText(title);
+        }
+        if (content != null) {
+            etContent.setText(content);
+        }
     }
 
     private void initViews() {
@@ -96,11 +125,27 @@ public class CreateQuestionActivity extends AppCompatActivity {
                     if (majors.isEmpty()) {
                         Toast.makeText(this, "Chưa có dữ liệu ngành", Toast.LENGTH_SHORT).show();
                     }
+                    preselectMajor(majors);
                 })
                 .addOnFailureListener(e -> {
                     if (isFinishing() || isDestroyed()) return;
                     Toast.makeText(this, "Lỗi tải danh sách ngành: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
+    }
+
+    private void preselectMajor(java.util.List<Major> majors) {
+        if (pendingMajorId == null || pendingMajorId.trim().isEmpty() || majors == null) {
+            return;
+        }
+        for (int i = 0; i < majors.size(); i++) {
+            Major major = majors.get(i);
+            if (major != null && (pendingMajorId.equals(major.getMajorId())
+                    || pendingMajorId.equals(major.getMajorName()))) {
+                selectedMajor = major;
+                actvMajor.setText(major.getMajorName(), false);
+                return;
+            }
+        }
     }
 
     private boolean validate(String title, String content) {
@@ -133,6 +178,22 @@ public class CreateQuestionActivity extends AppCompatActivity {
         if (!validate(title, content)) return;
 
         setPosting(true);
+
+        if (editQuestionId != null && !editQuestionId.trim().isEmpty()) {
+            questionService.updateQuestion(editQuestionId, title, content, editImageUrl)
+                    .addOnSuccessListener(unused -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        Toast.makeText(this, R.string.message_question_updated, Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                        finish();
+                    })
+                    .addOnFailureListener(e -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        setPosting(false);
+                        Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
+            return;
+        }
 
         Question question = new Question();
         question.setUserId(currentUser.getId());

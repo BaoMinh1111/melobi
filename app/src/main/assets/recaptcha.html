@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <style>
+        body { font-family: sans-serif; margin: 16px; background: #ffffff; color: #202124; }
+        p { font-size: 15px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+<p>Xác nhận bạn không phải là robot</p>
+<div class="g-recaptcha"
+     data-sitekey="SITE_KEY"
+     data-callback="onVerified"
+     data-expired-callback="onExpired"
+     data-error-callback="onFailed"></div>
+<script>
+    function onVerified(token) {
+        RecaptchaBridge.onVerified(token);
+    }
+    function onExpired() {
+        RecaptchaBridge.onExpired();
+    }
+    function onFailed() {
+        RecaptchaBridge.onFailed("Khong tai duoc reCAPTCHA");
+    }
+</script>
+</body>
+</html>

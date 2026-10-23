@@ -8,7 +8,10 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -122,6 +125,43 @@ public class QuestionService {
                 .limit(pageSize);
         if (lastVisible != null) query = query.startAfter(lastVisible);
         return query.get();
+    }
+
+    /** Tìm câu hỏi liên quan từ khóa trong tiêu đề, nội dung hoặc chuyên ngành. */
+    public Task<List<Question>> searchQuestions(String keyword) {
+        String kw = keyword != null ? keyword.trim().toLowerCase(Locale.ROOT) : "";
+        return db.collection(COL_QUESTIONS)
+                .get()
+                .continueWith(task -> {
+                    QuerySnapshot snapshot = task.getResult();
+                    List<Question> matched = new ArrayList<>();
+                    if (snapshot == null) {
+                        return matched;
+                    }
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        Question question = toQuestion(doc);
+                        if (question == null || !Question.STATUS_ACTIVE.equals(question.getStatus())) {
+                            continue;
+                        }
+                        if (kw.isEmpty() || matchesKeyword(question, kw)) {
+                            matched.add(question);
+                        }
+                    }
+                    Collections.sort(matched, (left, right) -> Long.compare(right.getCreatedAt(), left.getCreatedAt()));
+                    return matched;
+                });
+    }
+
+    private boolean matchesKeyword(Question question, String keyword) {
+        return containsIgnoreCase(question.getTitle(), keyword)
+                || containsIgnoreCase(question.getTitleLower(), keyword)
+                || containsIgnoreCase(question.getContent(), keyword)
+                || containsIgnoreCase(question.getCategory(), keyword)
+                || containsIgnoreCase(question.getMajorId(), keyword);
+    }
+
+    private boolean containsIgnoreCase(String value, String keyword) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
     }
 
     /** Cần composite index (status + majorId + createdAt). */

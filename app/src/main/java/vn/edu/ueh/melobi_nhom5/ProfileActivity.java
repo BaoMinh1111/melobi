@@ -1,5 +1,6 @@
 package vn.edu.ueh.melobi_nhom5;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -8,6 +9,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
@@ -18,22 +20,54 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
+import vn.edu.ueh.melobi_nhom5.adapter.ProfileAnswerAdapter;
+import vn.edu.ueh.melobi_nhom5.adapter.QuestionAdapter;
+import vn.edu.ueh.melobi_nhom5.model.Answer;
 import vn.edu.ueh.melobi_nhom5.model.Major;
+import vn.edu.ueh.melobi_nhom5.model.Question;
 import vn.edu.ueh.melobi_nhom5.model.User;
+import vn.edu.ueh.melobi_nhom5.service.FollowService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
 
 public class ProfileActivity extends AppCompatActivity {
+
+    public static final String EXTRA_USER_ID = "extra_user_id";
+    public static final String EXTRA_USER_NAME = "extra_user_name";
+
+    public static void openProfile(Context context, String userId, String fallbackName) {
+        if (context == null) {
+            return;
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            Toast.makeText(context, R.string.error_user_not_found, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(context, ProfileActivity.class);
+        intent.putExtra(EXTRA_USER_ID, userId);
+        if (fallbackName != null) {
+            intent.putExtra(EXTRA_USER_NAME, fallbackName);
+        }
+        if (!(context instanceof android.app.Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(intent);
+    }
 
     private MaterialToolbar toolbarProfile;
     private ImageView ivProfileAvatar;
@@ -48,13 +82,27 @@ public class ProfileActivity extends AppCompatActivity {
     private Button btnChooseAvatar;
     private Button btnSaveProfile;
     private Button btnLogoutProfile;
+    private Button btnFollowProfile;
+    private Button btnMessageProfile;
+    private View layoutPublicActions;
     private ProgressBar pbProfile;
+    private RecyclerView rvProfileQuestions;
+    private RecyclerView rvProfileAnswers;
+    private TextView tvEmptyQuestions;
+    private TextView tvEmptyAnswers;
 
     private UserService userService;
+    private FollowService followService;
     private FirebaseStorageManager firebaseStorageManager;
+    private QuestionAdapter questionAdapter;
+    private ProfileAnswerAdapter answerAdapter;
     private final List<Major> majorList = new ArrayList<>();
     private User currentProfile;
     private Uri selectedAvatarUri;
+    private String targetUserId;
+    private String fallbackName;
+    private boolean viewingSelf = true;
+    private boolean followingTarget;
 
     private final ActivityResultLauncher<String> pickAvatarLauncher =
             registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
@@ -80,12 +128,23 @@ public class ProfileActivity extends AppCompatActivity {
         setContentView(R.layout.activity_profile);
 
         userService = new UserService();
+        followService = new FollowService();
         firebaseStorageManager = new FirebaseStorageManager();
+
+        String currentUserId = AuthHelper.getCurrentUserId();
+        fallbackName = getIntent().getStringExtra(EXTRA_USER_NAME);
+        targetUserId = getIntent().getStringExtra(EXTRA_USER_ID);
+        if (targetUserId == null || targetUserId.trim().isEmpty()) {
+            targetUserId = currentUserId;
+        }
+        viewingSelf = currentUserId != null && currentUserId.equals(targetUserId);
 
         initViews();
         setupActions();
+        bindBottomNav();
         loadMajors();
         loadProfile();
+        loadHistory();
     }
 
     private void initViews() {
@@ -102,7 +161,30 @@ public class ProfileActivity extends AppCompatActivity {
         btnChooseAvatar = findViewById(R.id.btnChooseAvatar);
         btnSaveProfile = findViewById(R.id.btnSaveProfile);
         btnLogoutProfile = findViewById(R.id.btnLogoutProfile);
+        btnFollowProfile = findViewById(R.id.btnFollowProfile);
+        btnMessageProfile = findViewById(R.id.btnMessageProfile);
+        layoutPublicActions = findViewById(R.id.layoutPublicActions);
         pbProfile = findViewById(R.id.pbProfile);
+        rvProfileQuestions = findViewById(R.id.rvProfileQuestions);
+        rvProfileAnswers = findViewById(R.id.rvProfileAnswers);
+        tvEmptyQuestions = findViewById(R.id.tvEmptyQuestions);
+        tvEmptyAnswers = findViewById(R.id.tvEmptyAnswers);
+
+        questionAdapter = new QuestionAdapter(question -> {
+            Intent intent = new Intent(this, QuestionDetailActivity.class);
+            intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
+            startActivity(intent);
+        }, null);
+        rvProfileQuestions.setLayoutManager(new LinearLayoutManager(this));
+        rvProfileQuestions.setAdapter(questionAdapter);
+
+        answerAdapter = new ProfileAnswerAdapter(answer -> {
+            Intent intent = new Intent(this, QuestionDetailActivity.class);
+            intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION_ID, answer.getQuestionId());
+            startActivity(intent);
+        });
+        rvProfileAnswers.setLayoutManager(new LinearLayoutManager(this));
+        rvProfileAnswers.setAdapter(answerAdapter);
     }
 
     private void setupActions() {
@@ -113,6 +195,21 @@ public class ProfileActivity extends AppCompatActivity {
             userService.logout();
             navigateToLogin();
         });
+        btnFollowProfile.setOnClickListener(v -> toggleFollow());
+        btnMessageProfile.setOnClickListener(v -> openChat());
+        applyViewMode();
+    }
+
+    private void applyViewMode() {
+        int editVisibility = viewingSelf ? View.VISIBLE : View.GONE;
+        btnChooseAvatar.setVisibility(editVisibility);
+        btnSaveProfile.setVisibility(editVisibility);
+        btnLogoutProfile.setVisibility(editVisibility);
+        layoutPublicActions.setVisibility(viewingSelf ? View.GONE : View.VISIBLE);
+        etProfileFullName.setEnabled(viewingSelf);
+        etProfileBio.setEnabled(viewingSelf);
+        spinnerProfileMajor.setEnabled(viewingSelf);
+        toolbarProfile.setTitle(viewingSelf ? getString(R.string.title_profile) : getString(R.string.title_member_profile));
     }
 
     private void loadMajors() {
@@ -141,29 +238,31 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void loadProfile() {
-        String userId = AuthHelper.getCurrentUserId();
-        if (userId == null || userId.isEmpty()) {
+        if (targetUserId == null || targetUserId.isEmpty()) {
             navigateToLogin();
             return;
         }
 
         setLoading(true);
-        userService.getProfile(userId, new UserService.Callback<User>() {
+        userService.getProfile(targetUserId, new UserService.Callback<User>() {
             @Override
             public void onSuccess(User result) {
                 setLoading(false);
-                currentProfile = result != null ? result : AuthHelper.getCurrentUser();
+                currentProfile = result;
                 if (currentProfile == null) {
-                    navigateToLogin();
-                    return;
+                    currentProfile = new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
                 }
                 bindProfile();
+                if (!viewingSelf) {
+                    refreshFollowState();
+                }
             }
 
             @Override
             public void onError(Exception e) {
                 setLoading(false);
-                Toast.makeText(ProfileActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                currentProfile = new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
+                bindProfile();
             }
         });
     }
@@ -176,6 +275,127 @@ public class ProfileActivity extends AppCompatActivity {
         tvFollowingCount.setText(getString(R.string.label_following_count) + ": " + currentProfile.getFollowingCount());
         syncMajorSelection();
         renderAvatar();
+        if (!viewingSelf) {
+            updateFollowButton();
+        }
+    }
+
+    private void refreshFollowState() {
+        String currentUserId = AuthHelper.getCurrentUserId();
+        followService.isFollowing(currentUserId, targetUserId, FollowService.TARGET_USER, new FollowService.Callback<Boolean>() {
+            @Override
+            public void onSuccess(Boolean result) {
+                followingTarget = Boolean.TRUE.equals(result);
+                updateFollowButton();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                followingTarget = followService.isFollowing(currentUserId, targetUserId);
+                updateFollowButton();
+            }
+        });
+    }
+
+    private void updateFollowButton() {
+        btnFollowProfile.setText(followingTarget ? R.string.action_following : R.string.action_follow);
+    }
+
+    private void toggleFollow() {
+        String currentUserId = AuthHelper.getCurrentUserId();
+        if (currentUserId == null) {
+            navigateToLogin();
+            return;
+        }
+        setLoading(true);
+        FollowService.Callback<Boolean> callback = new FollowService.Callback<Boolean>() {
+            @Override
+            public void onSuccess(Boolean result) {
+                setLoading(false);
+                followingTarget = !followingTarget;
+                if (currentProfile != null) {
+                    int next = currentProfile.getFollowerCount() + (followingTarget ? 1 : -1);
+                    currentProfile.setFollowerCount(Math.max(0, next));
+                }
+                bindProfile();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                setLoading(false);
+                Toast.makeText(ProfileActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        };
+        if (followingTarget) {
+            followService.unfollowUser(currentUserId, targetUserId, callback);
+        } else {
+            followService.followUser(currentUserId, targetUserId, callback);
+        }
+    }
+
+    private void openChat() {
+        String currentUserId = AuthHelper.getCurrentUserId();
+        if (currentUserId != null && currentUserId.equals(targetUserId)) {
+            Toast.makeText(this, R.string.error_chat_self, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, ChatActivity.class);
+        intent.putExtra(ChatActivity.EXTRA_OTHER_USER_ID, targetUserId);
+        String name = etProfileFullName.getText() != null ? etProfileFullName.getText().toString() : fallbackName;
+        if (name != null && !name.trim().isEmpty()) {
+            intent.putExtra(ChatActivity.EXTRA_OTHER_USER_NAME, name);
+        }
+        startActivity(intent);
+    }
+
+    private void loadHistory() {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        db.collection("questions")
+                .whereEqualTo("userId", targetUserId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    List<Question> questions = new ArrayList<>();
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        Question question = mapQuestion(doc);
+                        if (question != null) {
+                            questions.add(question);
+                        }
+                    }
+                    Collections.sort(questions, (a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()));
+                    tvEmptyQuestions.setVisibility(questions.isEmpty() ? View.VISIBLE : View.GONE);
+                    questionAdapter.setQuestions(questions);
+                })
+                .addOnFailureListener(e -> tvEmptyQuestions.setVisibility(View.VISIBLE));
+
+        db.collection("answers")
+                .whereEqualTo("userId", targetUserId)
+                .get()
+                .addOnSuccessListener(snapshot -> {
+                    List<Answer> answers = new ArrayList<>();
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        Answer answer = doc.toObject(Answer.class);
+                        if (answer != null) {
+                            if (answer.getId() == null || answer.getId().isEmpty()) {
+                                answer.setId(doc.getId());
+                            }
+                            if (!answer.isHidden()) {
+                                answers.add(answer);
+                            }
+                        }
+                    }
+                    Collections.sort(answers, (a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()));
+                    tvEmptyAnswers.setVisibility(answers.isEmpty() ? View.VISIBLE : View.GONE);
+                    answerAdapter.setAnswers(answers);
+                })
+                .addOnFailureListener(e -> tvEmptyAnswers.setVisibility(View.VISIBLE));
+    }
+
+    private Question mapQuestion(DocumentSnapshot doc) {
+        Question question = vn.edu.ueh.melobi_nhom5.service.QuestionService.toQuestion(doc);
+        if (question == null || !Question.STATUS_ACTIVE.equals(question.getStatus())) {
+            return null;
+        }
+        return question;
     }
 
     private void syncMajorSelection() {
@@ -201,7 +421,7 @@ public class ProfileActivity extends AppCompatActivity {
             return;
         }
 
-        String fullName = currentProfile != null ? currentProfile.getFullName() : "";
+        String fullName = currentProfile != null ? currentProfile.getFullName() : fallbackName;
         String avatarUrl = currentProfile != null ? currentProfile.getAvatarUrl() : "";
         if (avatarUrl != null && !avatarUrl.trim().isEmpty()) {
             tvAvatarStatus.setText("Đã có ảnh đại diện");
@@ -243,7 +463,7 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void saveProfile() {
-        if (currentProfile == null) {
+        if (!viewingSelf || currentProfile == null) {
             Toast.makeText(this, "Không tìm thấy hồ sơ người dùng", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -347,6 +567,50 @@ public class ProfileActivity extends AppCompatActivity {
         btnChooseAvatar.setEnabled(!isLoading);
         btnSaveProfile.setEnabled(!isLoading);
         btnLogoutProfile.setEnabled(!isLoading);
+        btnFollowProfile.setEnabled(!isLoading);
+        btnMessageProfile.setEnabled(!isLoading);
+    }
+
+    private void bindBottomNav() {
+        ImageButton navHome = findViewById(R.id.navHome);
+        ImageButton navSearch = findViewById(R.id.navSearch);
+        ImageButton navChat = findViewById(R.id.navChat);
+        ImageButton navNotifications = findViewById(R.id.navNotifications);
+        ImageButton navProfile = findViewById(R.id.navProfile);
+        int selected = getResources().getColor(R.color.melobi_primary, getTheme());
+        int idle = getResources().getColor(R.color.text_tertiary, getTheme());
+        if (navHome != null) {
+            navHome.setColorFilter(idle);
+            navHome.setOnClickListener(v -> openMainTab(MainActivity.TAB_HOME));
+        }
+        if (navSearch != null) {
+            navSearch.setColorFilter(idle);
+            navSearch.setOnClickListener(v -> openMainTab(MainActivity.TAB_SEARCH));
+        }
+        if (navChat != null) {
+            navChat.setColorFilter(idle);
+            navChat.setOnClickListener(v ->
+                    startActivity(new Intent(this, ChatListActivity.class)));
+        }
+        if (navNotifications != null) {
+            navNotifications.setColorFilter(idle);
+            navNotifications.setOnClickListener(v -> openMainTab(MainActivity.TAB_NOTIFICATIONS));
+        }
+        if (navProfile != null) {
+            navProfile.setColorFilter(viewingSelf ? selected : idle);
+            if (!viewingSelf) {
+                navProfile.setOnClickListener(v ->
+                        startActivity(new Intent(this, ProfileActivity.class)));
+            }
+        }
+    }
+
+    private void openMainTab(String tab) {
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.putExtra(MainActivity.EXTRA_OPEN_TAB, tab);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
     }
 
     private void navigateToLogin() {

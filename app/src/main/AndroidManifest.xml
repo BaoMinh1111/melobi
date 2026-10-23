@@ -10,14 +10,20 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:resizeableActivity="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MelobiNhóm5">
+        android:theme="@style/Theme.MelobiNhóm5"
+        tools:targetApi="33">
         <activity
             android:name=".LoginActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="true"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,34 +33,55 @@
         </activity>
         <activity
             android:name=".RegisterActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".LoginActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ProfileActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".QuestionDetailActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".CreateQuestionActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ChatListActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ChatActivity"
+            android:configChanges="keyboard|keyboardHidden|screenLayout|uiMode"
             android:exported="false"
+            android:parentActivityName=".ChatListActivity"
+            android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustResize" />
     </application>
 

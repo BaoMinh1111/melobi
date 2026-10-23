@@ -23,6 +23,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.RecaptchaHelper;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -104,6 +105,28 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
+        setLoading(true);
+        RecaptchaHelper.verify(this, new RecaptchaHelper.Callback() {
+            @Override
+            public void onSuccess(String token) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                performEmailLogin();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                setLoading(false);
+                Toast.makeText(LoginActivity.this, R.string.error_recaptcha_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void performEmailLogin() {
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
@@ -130,6 +153,27 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         setLoading(true);
+        RecaptchaHelper.verify(this, new RecaptchaHelper.Callback() {
+            @Override
+            public void onSuccess(String token) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                launchGoogleSignIn();
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                setLoading(false);
+                Toast.makeText(LoginActivity.this, R.string.error_recaptcha_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void launchGoogleSignIn() {
         String webClientId = getString(R.string.google_web_client_id).trim();
         if (webClientId.isEmpty()) {
             setLoading(false);
@@ -171,6 +215,10 @@ public class LoginActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception e) {
+                if (AuthHelper.isLoggedIn()) {
+                    openHome(AuthHelper.getCurrentUser());
+                    return;
+                }
                 setLoading(false);
                 Toast.makeText(LoginActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
             }

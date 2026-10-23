@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /majors/{majorId} {
+      allow read, write: if signedIn();
+    }
+
+    match /questions/{questionId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn()
+          && (resource.data.userId == request.auth.uid
+              || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN");
+    }
+
+    match /answers/{answerId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn()
+          && resource.data.userId == request.auth.uid;
+    }
+
+    match /comments/{commentId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn()
+          && resource.data.userId == request.auth.uid;
+    }
+
+    match /follows/{followId} {
+      allow read, write: if signedIn();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if signedIn();
+    }
+
+    match /likes/{likeId} {
+      allow read, write: if signedIn();
+    }
+
+    match /conversations/{conversationId} {
+      allow read, write: if signedIn();
+      match /messages/{messageId} {
+        allow read, write: if signedIn();
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

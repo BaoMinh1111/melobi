@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -11,6 +12,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -31,6 +33,8 @@ import vn.edu.ueh.melobi_nhom5.repository.AnswerRepository;
 import vn.edu.ueh.melobi_nhom5.service.AnswerService;
 import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.SyncManager;
 import vn.edu.ueh.melobi_nhom5.service.NotificationService;
 import vn.edu.ueh.melobi_nhom5.entity.Notification;
 import vn.edu.ueh.melobi_nhom5.entity.Like;
@@ -41,6 +45,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     public static final String EXTRA_QUESTION_ID = "extra_question_id";
     /** Có thể truyền cả đối tượng Question (model.Question) để hiển thị ngay trong lúc tải. */
     public static final String EXTRA_QUESTION = "extra_question";
+    private static final String STATE_QUESTION_ID = "state_question_id";
 
     private String questionId;
     private Question question;               // có thể null cho tới khi tải xong
@@ -48,6 +53,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private AnswerService answerService;
     private QuestionService questionService;
     private NotificationService notificationService;
+    private SyncManager syncManager;
     private AnswerAdapter answerAdapter;
     private User currentUser;
 
@@ -66,6 +72,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
     private EditText etAnswerInput;
     private ImageButton btnSendAnswer;
+    private boolean skipNextResumeLoad;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -78,6 +85,9 @@ public class QuestionDetailActivity extends AppCompatActivity {
             question = (Question) extra;
             if (questionId == null || questionId.isEmpty()) questionId = question.getQuestionId();
         }
+        if (savedInstanceState != null && (questionId == null || questionId.isEmpty())) {
+            questionId = savedInstanceState.getString(STATE_QUESTION_ID);
+        }
 
         if (questionId == null || questionId.isEmpty()) {
             Toast.makeText(this, "Không tìm thấy thông tin câu hỏi", Toast.LENGTH_SHORT).show();
@@ -89,6 +99,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         answerService = new AnswerService();
         questionService = new QuestionService();
         notificationService = new NotificationService();
+        syncManager = SyncManager.getInstance(this);
         currentUser = AuthHelper.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", Toast.LENGTH_SHORT).show();
@@ -98,16 +109,37 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
         initViews();
         setupRecyclerView();
+        setupOwnerMenu();
 
         toolbarDetail.setNavigationOnClickListener(v -> finish());
-        tvQuestionAuthorName.setOnClickListener(v -> openChatWithAuthor());
-        tvQuestionAvatar.setOnClickListener(v -> openChatWithAuthor());
+        tvQuestionAuthorName.setOnClickListener(v -> openAuthorProfile());
+        tvQuestionAvatar.setOnClickListener(v -> openAuthorProfile());
         btnSendAnswer.setOnClickListener(v -> submitAnswer());
         btnSendAnswer.setEnabled(false);          // chỉ cho gửi sau khi xác nhận câu hỏi còn hiển thị
 
         if (question != null) displayQuestionInfo();   // hiển thị tạm bản truyền sang
+        skipNextResumeLoad = true;
         loadQuestion();
         loadAnswers();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (skipNextResumeLoad) {
+            skipNextResumeLoad = false;
+            return;
+        }
+        if (questionService != null && questionId != null && !questionId.isEmpty()) {
+            loadQuestion();
+            loadAnswers();
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_QUESTION_ID, questionId);
     }
 
     private void initViews() {
@@ -128,12 +160,62 @@ public class QuestionDetailActivity extends AppCompatActivity {
         btnSendAnswer = findViewById(R.id.btnSendAnswer);
     }
 
+    private void setupOwnerMenu() {
+        toolbarDetail.setOnMenuItemClickListener(this::onOwnerMenuClick);
+        bindOwnerMenu();
+    }
+
+    private boolean onOwnerMenuClick(MenuItem item) {
+        int itemId = item.getItemId();
+        if (itemId == R.id.action_edit_question) {
+            openEditQuestion();
+            return true;
+        }
+        if (itemId == R.id.action_delete_question) {
+            confirmDeleteQuestion();
+            return true;
+        }
+        return false;
+    }
+
+    private void bindOwnerMenu() {
+        boolean owner = isQuestionOwner();
+        MenuItem editItem = toolbarDetail.getMenu().findItem(R.id.action_edit_question);
+        MenuItem deleteItem = toolbarDetail.getMenu().findItem(R.id.action_delete_question);
+        if (editItem != null) {
+            editItem.setVisible(owner);
+        }
+        if (deleteItem != null) {
+            deleteItem.setVisible(owner);
+        }
+    }
+
+    private boolean isQuestionOwner() {
+        return currentUser != null && question != null
+                && currentUser.getId() != null
+                && currentUser.getId().equals(question.getUserId());
+    }
+
+    private boolean isOwnContent(String authorId) {
+        return currentUser != null && currentUser.getId() != null && currentUser.getId().equals(authorId);
+    }
+
     /** Tải câu hỏi mới nhất từ Firestore; đóng màn hình nếu đã bị xóa hoặc bị ẩn. */
     private void loadQuestion() {
+        if (!NetworkUtils.isOnline() && question != null) {
+            displayQuestionInfo();
+            btnSendAnswer.setEnabled(false);
+            Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         questionService.getQuestionDetail(questionId)
                 .addOnSuccessListener(loaded -> {
                     if (isFinishing() || isDestroyed()) return;
                     if (loaded == null) {      // không tồn tại hoặc không còn VISIBLE
+                        if (showCachedQuestionIfNeeded() || question != null) {
+                            return;
+                        }
                         Toast.makeText(this, "Câu hỏi không còn tồn tại", Toast.LENGTH_SHORT).show();
                         finish();
                         return;
@@ -144,8 +226,28 @@ public class QuestionDetailActivity extends AppCompatActivity {
                 })
                 .addOnFailureListener(e -> {
                     if (isFinishing() || isDestroyed()) return;
+                    if (showCachedQuestionIfNeeded()) {
+                        return;
+                    }
                     Toast.makeText(this, "Lỗi tải câu hỏi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 });
+    }
+
+    private boolean showCachedQuestionIfNeeded() {
+        List<Question> cached = syncManager.getViewedQuestionsLastDay();
+        if (cached == null) {
+            return false;
+        }
+        for (Question item : cached) {
+            if (questionId.equals(item.getQuestionId())) {
+                question = item;
+                displayQuestionInfo();
+                btnSendAnswer.setEnabled(false);
+                Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+                return true;
+            }
+        }
+        return false;
     }
 
     private void displayQuestionInfo() {
@@ -173,29 +275,48 @@ public class QuestionDetailActivity extends AppCompatActivity {
         );
         tvQuestionTime.setText(relativeTime);
         tvQuestionAuthorName.setTextColor(getResources().getColor(R.color.melobi_primary, getTheme()));
+        bindOwnerMenu();
     }
 
-    private void openChatWithAuthor() {
+    private void openAuthorProfile() {
         if (question == null) {
             return;
         }
-        String authorId = question.getUserId();
-        if (authorId == null || authorId.trim().isEmpty()) {
-            Toast.makeText(this, "Không tìm thấy tác giả câu hỏi", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (currentUser != null && authorId.equals(currentUser.getId())) {
-            Toast.makeText(this, R.string.error_chat_self, Toast.LENGTH_SHORT).show();
-            return;
-        }
+        ProfileActivity.openProfile(this, question.getUserId(), question.getUserName());
+    }
 
-        Intent intent = new Intent(this, ChatActivity.class);
-        intent.putExtra(ChatActivity.EXTRA_OTHER_USER_ID, authorId);
-        String authorName = question.getUserName();
-        if (authorName != null && !authorName.trim().isEmpty()) {
-            intent.putExtra(ChatActivity.EXTRA_OTHER_USER_NAME, authorName);
+    private void openEditQuestion() {
+        if (!isQuestionOwner()) {
+            Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+            return;
         }
+        Intent intent = new Intent(this, CreateQuestionActivity.class);
+        intent.putExtra(CreateQuestionActivity.EXTRA_EDIT_QUESTION_ID, question.getQuestionId());
+        intent.putExtra(CreateQuestionActivity.EXTRA_EDIT_TITLE, question.getTitle());
+        intent.putExtra(CreateQuestionActivity.EXTRA_EDIT_CONTENT, question.getContent());
+        intent.putExtra(CreateQuestionActivity.EXTRA_EDIT_MAJOR_ID, question.getMajorId());
+        intent.putExtra(CreateQuestionActivity.EXTRA_EDIT_IMAGE_URL, question.getImageUrl());
         startActivity(intent);
+    }
+
+    private void confirmDeleteQuestion() {
+        if (!isQuestionOwner()) {
+            Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Xác nhận xóa")
+                .setMessage(R.string.confirm_delete_question)
+                .setPositiveButton("Xóa", (dialog, which) -> {
+                    questionService.deleteQuestion(questionId)
+                            .addOnSuccessListener(unused -> {
+                                Toast.makeText(this, R.string.message_question_deleted, Toast.LENGTH_SHORT).show();
+                                finish();
+                            })
+                            .addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     private void setupRecyclerView() {
@@ -219,6 +340,11 @@ public class QuestionDetailActivity extends AppCompatActivity {
             public void onDeleteClick(Answer answer) {
                 confirmDeleteAnswer(answer);
             }
+
+            @Override
+            public void onAuthorClick(Answer answer) {
+                ProfileActivity.openProfile(QuestionDetailActivity.this, answer.getUserId(), answer.getUserName());
+            }
         });
 
         rvAnswers.setLayoutManager(new LinearLayoutManager(this));
@@ -229,29 +355,53 @@ public class QuestionDetailActivity extends AppCompatActivity {
         pbAnswersLoading.setVisibility(View.VISIBLE);
         tvEmptyAnswers.setVisibility(View.GONE);
 
+        if (!NetworkUtils.isOnline()) {
+            List<Answer> cached = syncManager.getCachedAnswers(questionId);
+            bindAnswers(cached);
+            return;
+        }
+
         answerRepository.getAnswersByQuestionId(questionId, new AnswerRepository.Callback<List<Answer>>() {
             @Override
             public void onSuccess(List<Answer> list) {
-                pbAnswersLoading.setVisibility(View.GONE);
-                if (list.isEmpty()) {
-                    tvEmptyAnswers.setVisibility(View.VISIBLE);
-                } else {
-                    tvEmptyAnswers.setVisibility(View.GONE);
+                bindAnswers(list);
+                if (question != null) {
+                    syncManager.cacheQuestionDetail(question, list);
                 }
-                tvAnswersHeader.setText("Câu trả lời (" + list.size() + ")");
-                answerAdapter.setAnswers(list);
             }
 
             @Override
             public void onError(Exception e) {
+                List<Answer> cached = syncManager.getCachedAnswers(questionId);
+                if (cached != null && !cached.isEmpty()) {
+                    bindAnswers(cached);
+                    Toast.makeText(QuestionDetailActivity.this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 pbAnswersLoading.setVisibility(View.GONE);
                 Toast.makeText(QuestionDetailActivity.this, "Lỗi tải câu trả lời: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
 
+    private void bindAnswers(List<Answer> list) {
+        pbAnswersLoading.setVisibility(View.GONE);
+        List<Answer> answers = list != null ? list : java.util.Collections.emptyList();
+        if (answers.isEmpty()) {
+            tvEmptyAnswers.setVisibility(View.VISIBLE);
+        } else {
+            tvEmptyAnswers.setVisibility(View.GONE);
+        }
+        tvAnswersHeader.setText("Câu trả lời (" + answers.size() + ")");
+        answerAdapter.setAnswers(answers);
+    }
+
     private void submitAnswer() {
         if (question == null) return;             // chưa tải xong câu hỏi
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String content = etAnswerInput.getText().toString().trim();
         if (content.isEmpty()) {
             Toast.makeText(this, "Vui lòng nhập nội dung câu trả lời", Toast.LENGTH_SHORT).show();
@@ -292,6 +442,14 @@ public class QuestionDetailActivity extends AppCompatActivity {
         answerRepository.toggleLike(answer.getId(), currentUser.getId(), new AnswerRepository.Callback<Answer>() {
             @Override
             public void onSuccess(Answer result) {
+                if (result != null && result.isLikedBy(currentUser.getId())) {
+                    notificationService.createNotification(
+                            answer.getUserId(),
+                            currentUser.getId(),
+                            Notification.TYPE_LIKE,
+                            questionId,
+                            Like.TYPE_ANSWER);
+                }
                 loadAnswers();
             }
 
@@ -303,6 +461,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void showEditAnswerDialog(Answer answer) {
+        if (!isOwnContent(answer.getUserId())) {
+            Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+            return;
+        }
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_edit_text, null);
         TextInputEditText etInput = dialogView.findViewById(R.id.etDialogInput);
         etInput.setText(answer.getContent());
@@ -334,6 +496,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteAnswer(Answer answer) {
+        if (!isOwnContent(answer.getUserId())) {
+            Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
+            return;
+        }
         new AlertDialog.Builder(this)
                 .setTitle("Xác nhận xóa")
                 .setMessage("Bạn có chắc muốn xóa câu trả lời này cùng tất cả bình luận liên quan?")

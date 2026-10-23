@@ -15,6 +15,7 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/melobi_primary"
+        app:menu="@menu/menu_question_detail"
         app:navigationIcon="@drawable/ic_arrow_back"
         app:navigationIconTint="@color/white"
         app:title="@string/title_question_detail"

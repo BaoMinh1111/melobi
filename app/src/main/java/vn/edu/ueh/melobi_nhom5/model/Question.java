@@ -10,6 +10,7 @@ public class Question implements Serializable {
     private String questionId;
     private String userId;
     private String majorId;
+    private String category;
     private String title;
     private String titleLower;
     private String content;
@@ -33,6 +34,7 @@ public class Question implements Serializable {
         this.content = content;
         this.userId = userId;
         this.majorId = category;
+        this.category = category;
         this.userName = userName;
         this.userAvatarUrl = userAvatarUrl;
         this.createdAt = createdAt;
@@ -83,11 +85,14 @@ public class Question implements Serializable {
     }
 
     public String getCategory() {
+        if (category != null && !category.trim().isEmpty()) {
+            return category;
+        }
         return majorId;
     }
 
     public void setCategory(String category) {
-        this.majorId = category;
+        this.category = category;
     }
 
     public String getUserId() {

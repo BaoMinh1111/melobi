@@ -7,6 +7,7 @@
         <item name="android:colorBackground">@color/melobi_background</item>
         <item name="colorSurface">@color/melobi_surface</item>
         <item name="android:statusBarColor">@color/melobi_primary_dark</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
     </style>
 
     <style name="Theme.MelobiNhóm5" parent="Base.Theme.MelobiNhóm5" />

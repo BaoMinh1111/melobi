@@ -21,6 +21,8 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.CommentV
     public interface OnCommentActionListener {
         void onEditClick(Comment comment);
         void onDeleteClick(Comment comment);
+        default void onAuthorClick(Comment comment) {
+        }
     }
 
     private final List<Comment> commentList = new ArrayList<>();
@@ -112,6 +114,12 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.CommentV
             btnDeleteComment.setOnClickListener(v -> {
                 if (listener != null) listener.onDeleteClick(comment);
             });
+
+            View.OnClickListener openAuthor = v -> {
+                if (listener != null) listener.onAuthorClick(comment);
+            };
+            tvCommentAvatar.setOnClickListener(openAuthor);
+            tvCommentAuthor.setOnClickListener(openAuthor);
         }
     }
 }
