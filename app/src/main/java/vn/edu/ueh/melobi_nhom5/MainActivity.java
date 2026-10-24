@@ -259,7 +259,6 @@ public class MainActivity extends AppCompatActivity {
             pbLoadMore.setVisibility(View.GONE);
 
             List<Question> page = result.questions;
-            // Trang từ SQLite thì bỏ con trỏ Firestore, trang sau (dù online hay offline) dùng createdAt
             if (result.fromCache && currentKeyword.isEmpty()) lastVisible = null;
             else if (result.lastDoc != null) lastVisible = result.lastDoc;
             if (result.lastCreatedAt > 0) lastCreatedAt = result.lastCreatedAt;
@@ -277,7 +276,6 @@ public class MainActivity extends AppCompatActivity {
             }
             loadedCount += page.size();
 
-            // Chưa có dữ liệu nào ở feed "Tất cả" (và đang có mạng thật) -> nạp dữ liệu mẫu, chỉ thử một lần
             if (loadedCount == 0 && CATEGORY_ALL.equals(currentCategory) && currentKeyword.isEmpty()
                     && !result.fromCache && !sampleInitTried) {
                 sampleInitTried = true;
@@ -325,8 +323,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Chỉ làm mới khi vừa quay lại từ màn hình khác (đăng câu hỏi / xem chi tiết),
-        // để không bị nhảy về đầu danh sách ở những lần resume khác.
         if (needsRefresh) {
             needsRefresh = false;
             loadFirstPage();
