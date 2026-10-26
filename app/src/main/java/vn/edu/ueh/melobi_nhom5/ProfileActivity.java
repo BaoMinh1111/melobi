@@ -3,7 +3,6 @@ package vn.edu.ueh.melobi_nhom5;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -30,8 +29,6 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
-import java.io.InputStream;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -580,22 +577,28 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void loadAvatarFromUrl(String avatarUrl, String fallbackName) {
-        new Thread(() -> {
-            try (InputStream inputStream = new URL(avatarUrl).openStream()) {
-                Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-                runOnUiThread(() -> {
-                    if (bitmap != null) {
-                        ivProfileAvatar.setVisibility(View.VISIBLE);
-                        ivProfileAvatar.setImageBitmap(bitmap);
-                        tvProfileInitial.setVisibility(View.GONE);
-                    } else {
-                        showAvatarPlaceholder(fallbackName);
-                    }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> showAvatarPlaceholder(fallbackName));
+        FirebaseStorageManager.loadBitmap(avatarUrl, 512, new FirebaseStorageManager.Callback<Bitmap>() {
+            @Override
+            public void onSuccess(Bitmap bitmap) {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (bitmap != null) {
+                    ivProfileAvatar.setVisibility(View.VISIBLE);
+                    ivProfileAvatar.setImageBitmap(bitmap);
+                    tvProfileInitial.setVisibility(View.GONE);
+                } else {
+                    showAvatarPlaceholder(fallbackName);
+                }
             }
-        }).start();
+
+            @Override
+            public void onError(Exception e) {
+                if (!isFinishing() && !isDestroyed()) {
+                    showAvatarPlaceholder(fallbackName);
+                }
+            }
+        });
     }
 
     private void showAvatarPlaceholder(String fullName) {

@@ -1,5 +1,6 @@
 package vn.edu.ueh.melobi_nhom5.service;
 
+import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Patterns;
 
@@ -233,11 +234,13 @@ public class UserService {
 
         FirebaseUser currentFirebaseUser = auth.getCurrentUser();
         if (currentFirebaseUser != null && user.getUserId().equals(currentFirebaseUser.getUid())) {
-            currentFirebaseUser.updateProfile(
-                    new UserProfileChangeRequest.Builder()
-                            .setDisplayName(user.getFullName())
-                            .build()
-            ).addOnCompleteListener(task -> saveUserDocument(user, callback));
+            UserProfileChangeRequest.Builder builder = new UserProfileChangeRequest.Builder()
+                    .setDisplayName(user.getFullName());
+            if (!TextUtils.isEmpty(user.getAvatarUrl())) {
+                builder.setPhotoUri(Uri.parse(user.getAvatarUrl()));
+            }
+            currentFirebaseUser.updateProfile(builder.build())
+                    .addOnCompleteListener(task -> saveUserDocument(user, callback));
             return;
         }
 

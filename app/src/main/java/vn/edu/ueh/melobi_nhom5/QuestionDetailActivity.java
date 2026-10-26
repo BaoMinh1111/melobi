@@ -76,6 +76,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private ImageButton btnSendAnswer;
     private View btnQuestionLike;
     private ImageView ivQuestionLike;
+    private ImageView ivQuestionImage;
     private TextView tvQuestionLikeCount;
     private boolean skipNextResumeLoad;
     private boolean questionLiked;
@@ -178,6 +179,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         btnSendAnswer = findViewById(R.id.btnSendAnswer);
         btnQuestionLike = findViewById(R.id.btnQuestionLike);
         ivQuestionLike = findViewById(R.id.ivQuestionLike);
+        ivQuestionImage = findViewById(R.id.ivQuestionImage);
         tvQuestionLikeCount = findViewById(R.id.tvQuestionLikeCount);
         if (btnQuestionLike != null) {
             btnQuestionLike.setOnClickListener(v -> toggleQuestionLike());
@@ -307,8 +309,41 @@ public class QuestionDetailActivity extends AppCompatActivity {
         );
         tvQuestionTime.setText(relativeTime);
         tvQuestionAuthorName.setTextColor(getResources().getColor(R.color.melobi_primary, getTheme()));
+        bindQuestionImage();
         bindQuestionLike();
         bindOwnerMenu();
+    }
+
+    private void bindQuestionImage() {
+        if (ivQuestionImage == null) {
+            return;
+        }
+        String imageUrl = question != null ? question.getImageUrl() : null;
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
+            ivQuestionImage.setVisibility(View.GONE);
+            ivQuestionImage.setImageDrawable(null);
+            return;
+        }
+        ivQuestionImage.setVisibility(View.VISIBLE);
+        vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager.loadBitmap(
+                imageUrl,
+                1080,
+                new vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager.Callback<android.graphics.Bitmap>() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap result) {
+                        if (!isFinishing() && !isDestroyed() && ivQuestionImage != null) {
+                            ivQuestionImage.setImageBitmap(result);
+                        }
+                    }
+
+                    @Override
+                    public void onError(Exception e) {
+                        if (!isFinishing() && !isDestroyed() && ivQuestionImage != null) {
+                            ivQuestionImage.setVisibility(View.GONE);
+                        }
+                    }
+                }
+        );
     }
 
     private void bindQuestionLike() {

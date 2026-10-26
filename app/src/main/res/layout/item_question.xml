@@ -101,6 +101,15 @@
             android:textSize="13sp"
             tools:text="Em đang bắt đầu học phát triển ứng dụng di động, các anh chị cho em xin lời khuyên nên học Java trước hay vào thẳng Kotlin luôn ạ?" />
 
+        <ImageView
+            android:id="@+id/ivQuestionImage"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:layout_marginTop="8dp"
+            android:contentDescription="@string/hint_question_image"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
         <!-- Footer Info: Answer Count Badge -->
         <LinearLayout
             android:layout_width="match_parent"

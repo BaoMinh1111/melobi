@@ -122,7 +122,11 @@
     <string name="notification_new_answer">%1$s đã trả lời câu hỏi của bạn</string>
     <string name="notification_new_comment">%1$s đã bình luận bài của bạn</string>
     <string name="notification_follow">%1$s đã theo dõi bạn</string>
+    <string name="notification_message">%1$s đã nhắn tin cho bạn</string>
     <string name="notification_generic">Bạn có thông báo mới từ %1$s</string>
+    <string name="button_attach_image">Đính kèm ảnh</string>
+    <string name="button_remove_image">Gỡ ảnh</string>
+    <string name="hint_question_image">Thêm ảnh minh họa để người khác dễ hiểu câu hỏi hơn</string>
     <string name="notification_someone">Ai đó</string>
     <string name="title_liked_questions">Bài viết đã thích</string>
     <string name="empty_liked_questions">Chưa thích bài viết nào.</string>

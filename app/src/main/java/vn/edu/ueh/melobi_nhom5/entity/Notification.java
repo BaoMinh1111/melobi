@@ -5,6 +5,7 @@ public class Notification {
     public static final String TYPE_NEW_ANSWER = "NEW_ANSWER";
     public static final String TYPE_NEW_COMMENT = "NEW_COMMENT";
     public static final String TYPE_LIKE = "LIKE";
+    public static final String TYPE_MESSAGE = "MESSAGE";
 
     private String notificationId;
     private String receiverId;

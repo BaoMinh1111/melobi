@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import vn.edu.ueh.melobi_nhom5.entity.Conversation;
 import vn.edu.ueh.melobi_nhom5.entity.Message;
+import vn.edu.ueh.melobi_nhom5.entity.Notification;
 
 /**
  * ChatService theo tài liệu: createConversation, sendMessage, getMessages,
@@ -44,9 +45,11 @@ public class ChatService {
     private static final int BATCH_LIMIT = 500;
 
     private final FirebaseFirestore db;
+    private final NotificationService notificationService;
 
     public ChatService() {
         db = FirebaseFirestore.getInstance();
+        notificationService = new NotificationService();
     }
 
     public Task<Conversation> createConversation(String user1Id, String user2Id) {
@@ -124,6 +127,7 @@ public class ChatService {
         conversationUpdate.put("updatedAt", now);
         conversationUpdate.put("conversationId", conversationId);
 
+        final String[] receiverId = new String[1];
         return conversationRef.get().continueWithTask(task -> {
             DocumentSnapshot snapshot = task.getResult();
             if (snapshot != null && snapshot.exists()) {
@@ -138,6 +142,11 @@ public class ChatService {
                 if (!isBlank(user1Id) && !isBlank(user2Id)) {
                     conversationUpdate.put("participants", Arrays.asList(user1Id, user2Id));
                 }
+                if (senderId.equals(user1Id)) {
+                    receiverId[0] = user2Id;
+                } else if (senderId.equals(user2Id)) {
+                    receiverId[0] = user1Id;
+                }
             }
             WriteBatch batch = db.batch();
             batch.set(messageRef, messageData);
@@ -145,6 +154,15 @@ public class ChatService {
             return batch.commit();
         }).continueWith(task -> {
             task.getResult();
+            if (!isBlank(receiverId[0])) {
+                notificationService.createNotification(
+                        receiverId[0],
+                        senderId,
+                        Notification.TYPE_MESSAGE,
+                        conversationId,
+                        "CONVERSATION"
+                );
+            }
             return message;
         });
     }

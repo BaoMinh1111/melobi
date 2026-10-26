@@ -105,6 +105,9 @@ public class NotificationAdapter extends RecyclerView.Adapter<NotificationAdapte
         if (Notification.TYPE_FOLLOW.equalsIgnoreCase(type)) {
             return holder.itemView.getContext().getString(R.string.notification_follow, actorName);
         }
+        if (Notification.TYPE_MESSAGE.equalsIgnoreCase(type)) {
+            return holder.itemView.getContext().getString(R.string.notification_message, actorName);
+        }
         return holder.itemView.getContext().getString(R.string.notification_generic, actorName);
     }
 

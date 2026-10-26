@@ -17,6 +17,7 @@ import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.R;
 import vn.edu.ueh.melobi_nhom5.model.Question;
+import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
 
 public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.QuestionViewHolder> {
 
@@ -104,6 +105,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
         private final View btnQuestionLike;
         private final ImageView ivQuestionLike;
         private final TextView tvQuestionLikeCount;
+        private final ImageView ivQuestionImage;
 
         public QuestionViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -117,6 +119,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             btnQuestionLike = itemView.findViewById(R.id.btnQuestionLike);
             ivQuestionLike = itemView.findViewById(R.id.ivQuestionLike);
             tvQuestionLikeCount = itemView.findViewById(R.id.tvQuestionLikeCount);
+            ivQuestionImage = itemView.findViewById(R.id.ivQuestionImage);
         }
 
         public void bind(Question question,
@@ -139,6 +142,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             tvMainAuthorName.setText(authorName);
             tvMainAvatar.setText(authorName.substring(0, 1).toUpperCase());
             tvMainTime.setText(relativeTime);
+            bindQuestionImage(question.getImageUrl());
 
             boolean liked = likedQuestionIds != null && likedQuestionIds.contains(question.getId());
             if (tvQuestionLikeCount != null) {
@@ -170,6 +174,36 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onQuestionClick(question);
+                }
+            });
+        }
+
+        private void bindQuestionImage(String imageUrl) {
+            if (ivQuestionImage == null) {
+                return;
+            }
+            if (imageUrl == null || imageUrl.trim().isEmpty()) {
+                ivQuestionImage.setTag(null);
+                ivQuestionImage.setImageDrawable(null);
+                ivQuestionImage.setVisibility(View.GONE);
+                return;
+            }
+            ivQuestionImage.setVisibility(View.VISIBLE);
+            ivQuestionImage.setTag(imageUrl);
+            ivQuestionImage.setImageDrawable(null);
+            FirebaseStorageManager.loadBitmap(imageUrl, 720, new FirebaseStorageManager.Callback<android.graphics.Bitmap>() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap result) {
+                    if (imageUrl.equals(ivQuestionImage.getTag())) {
+                        ivQuestionImage.setImageBitmap(result);
+                    }
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    if (imageUrl.equals(ivQuestionImage.getTag())) {
+                        ivQuestionImage.setVisibility(View.GONE);
+                    }
                 }
             });
         }

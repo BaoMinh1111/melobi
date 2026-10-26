@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -42,9 +43,11 @@ import vn.edu.ueh.melobi_nhom5.adapter.FollowUserAdapter;
 import vn.edu.ueh.melobi_nhom5.adapter.NotificationAdapter;
 import vn.edu.ueh.melobi_nhom5.adapter.QuestionAdapter;
 import vn.edu.ueh.melobi_nhom5.entity.Notification;
+import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.Question;
 import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.FollowService;
+import vn.edu.ueh.melobi_nhom5.service.MajorService;
 import vn.edu.ueh.melobi_nhom5.service.NotificationService;
 import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
@@ -84,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final List<Question> allQuestions = new ArrayList<>();
     private String currentCategory = "Tất cả";
+    private String currentMajorId;
     private String currentKeyword = "";
     private boolean searchMode;
     private EditText etSearchQuestion;
@@ -415,37 +419,101 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupCategoryChips() {
         ChipGroup chipGroup = findViewById(R.id.chipGroupCategory);
-        if (chipGroup != null) {
-            restoreCheckedChip(chipGroup);
-            chipGroup.setOnCheckedChangeListener((group, checkedId) -> {
-                if (checkedId == R.id.chipAll) {
-                    currentCategory = "Tất cả";
-                } else if (checkedId == R.id.chipIT) {
-                    currentCategory = "Công nghệ thông tin";
-                } else if (checkedId == R.id.chipEcon) {
-                    currentCategory = "Kinh tế";
-                } else if (checkedId == R.id.chipMarketing) {
-                    currentCategory = "Marketing";
-                } else if (checkedId == R.id.chipOther) {
-                    currentCategory = "Khác";
-                }
-                applyFilters();
-            });
+        if (chipGroup == null) {
+            return;
         }
+        bindChipGroupListener(chipGroup);
+        new MajorService().getAllMajors()
+                .addOnSuccessListener(majors -> bindCategoryChips(chipGroup, majors))
+                .addOnFailureListener(e -> bindCategoryChips(chipGroup, SampleDataInitializer.getSampleMajors()));
     }
 
-    private void restoreCheckedChip(ChipGroup chipGroup) {
-        int chipId = R.id.chipAll;
-        if ("Công nghệ thông tin".equals(currentCategory)) {
-            chipId = R.id.chipIT;
-        } else if ("Kinh tế".equals(currentCategory)) {
-            chipId = R.id.chipEcon;
-        } else if ("Marketing".equals(currentCategory)) {
-            chipId = R.id.chipMarketing;
-        } else if ("Khác".equals(currentCategory)) {
-            chipId = R.id.chipOther;
+    private void bindChipGroupListener(ChipGroup chipGroup) {
+        chipGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == View.NO_ID) {
+                return;
+            }
+            if (checkedId == R.id.chipAll) {
+                currentCategory = "Tất cả";
+                currentMajorId = null;
+            } else {
+                Chip chip = group.findViewById(checkedId);
+                if (chip == null) {
+                    return;
+                }
+                currentCategory = chip.getText() != null ? chip.getText().toString() : "Tất cả";
+                Object tag = chip.getTag();
+                currentMajorId = tag instanceof String ? (String) tag : null;
+            }
+            applyFilters();
+        });
+    }
+
+    private void bindCategoryChips(ChipGroup chipGroup, List<Major> majors) {
+        if (chipGroup == null) {
+            return;
         }
-        chipGroup.check(chipId);
+        List<Major> items = majors != null && !majors.isEmpty()
+                ? new ArrayList<>(majors)
+                : SampleDataInitializer.getSampleMajors();
+        Collections.sort(items, (left, right) -> {
+            boolean leftOther = isOtherMajor(left);
+            boolean rightOther = isOtherMajor(right);
+            if (leftOther != rightOther) {
+                return leftOther ? 1 : -1;
+            }
+            String leftName = left.getMajorName() != null ? left.getMajorName() : "";
+            String rightName = right.getMajorName() != null ? right.getMajorName() : "";
+            return leftName.compareToIgnoreCase(rightName);
+        });
+
+        chipGroup.setOnCheckedChangeListener(null);
+        for (int i = chipGroup.getChildCount() - 1; i >= 0; i--) {
+            View child = chipGroup.getChildAt(i);
+            if (child.getId() != R.id.chipAll) {
+                chipGroup.removeViewAt(i);
+            }
+        }
+        int checkedId = R.id.chipAll;
+        for (Major major : items) {
+            if (major == null || major.getMajorName() == null || major.getMajorName().trim().isEmpty()) {
+                continue;
+            }
+            Chip chip = new Chip(this);
+            chip.setId(View.generateViewId());
+            chip.setText(major.getMajorName());
+            chip.setTag(major.getMajorId());
+            chip.setCheckable(true);
+            chip.setCheckedIconVisible(false);
+            chipGroup.addView(chip);
+            if (matchesSelectedMajor(major)) {
+                checkedId = chip.getId();
+            }
+        }
+        bindChipGroupListener(chipGroup);
+        chipGroup.check(checkedId);
+    }
+
+    private boolean matchesSelectedMajor(Major major) {
+        if (major == null) {
+            return false;
+        }
+        if (currentMajorId != null && currentMajorId.equalsIgnoreCase(major.getMajorId())) {
+            return true;
+        }
+        return currentCategory != null
+                && !"Tất cả".equals(currentCategory)
+                && (currentCategory.equalsIgnoreCase(major.getMajorName())
+                || currentCategory.equalsIgnoreCase(major.getMajorId()));
+    }
+
+    private boolean isOtherMajor(Major major) {
+        if (major == null) {
+            return false;
+        }
+        String id = major.getMajorId() != null ? major.getMajorId().toLowerCase(Locale.ROOT) : "";
+        String name = major.getMajorName() != null ? major.getMajorName().toLowerCase(Locale.ROOT) : "";
+        return "other".equals(id) || "khac".equals(id) || "khác".equals(name);
     }
 
     private void applyFilters() {
@@ -574,15 +642,20 @@ public class MainActivity extends AppCompatActivity {
         if (category == null || "Tất cả".equals(category)) {
             return true;
         }
+        if (currentMajorId != null && !currentMajorId.trim().isEmpty()
+                && currentMajorId.equalsIgnoreCase(question.getMajorId())) {
+            return true;
+        }
         if (containsIgnoreCase(question.getCategory(), category.toLowerCase(Locale.ROOT))
-                || category.equalsIgnoreCase(question.getMajorId())) {
+                || category.equalsIgnoreCase(question.getMajorId())
+                || containsIgnoreCase(question.getMajorId(), category.toLowerCase(Locale.ROOT))) {
             return true;
         }
         String majorId = question.getMajorId() != null ? question.getMajorId().toLowerCase(Locale.ROOT) : "";
         if ("Công nghệ thông tin".equals(category) && (majorId.equals("it") || majorId.contains("cntt"))) {
             return true;
         }
-        if ("Kinh tế".equals(category) && (majorId.equals("econ") || majorId.contains("kinh"))) {
+        if ("Kinh tế".equals(category) && (majorId.equals("econ") || majorId.contains("kinh") || majorId.equals("business"))) {
             return true;
         }
         if ("Marketing".equals(category) && majorId.contains("market")) {
@@ -788,6 +861,9 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         refreshLikedQuestionIds();
+        if (currentUser != null) {
+            loadCurrentProfile();
+        }
         if (TAB_NOTIFICATIONS.equals(currentTab)) {
             loadNotifications();
         }
@@ -1072,6 +1148,13 @@ public class MainActivity extends AppCompatActivity {
         String type = notification.getType();
         if (Notification.TYPE_FOLLOW.equalsIgnoreCase(type)) {
             ProfileActivity.openProfile(this, notification.getActorId(), null);
+            return;
+        }
+        if (Notification.TYPE_MESSAGE.equalsIgnoreCase(type)) {
+            Intent intent = new Intent(this, ChatActivity.class);
+            intent.putExtra(ChatActivity.EXTRA_CONVERSATION_ID, notification.getTargetId());
+            intent.putExtra(ChatActivity.EXTRA_OTHER_USER_ID, notification.getActorId());
+            startActivity(intent);
             return;
         }
         String questionId = notification.getTargetId();
