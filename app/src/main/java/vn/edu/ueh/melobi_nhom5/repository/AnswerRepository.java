@@ -4,9 +4,12 @@ import android.util.Log;
 
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
-
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.MetadataChanges;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.firestore.WriteBatch;
 
@@ -31,6 +34,37 @@ public class AnswerRepository {
 
     public AnswerRepository() {
         this.db = FirebaseFirestore.getInstance();
+    }
+
+    public ListenerRegistration listenAnswers(String questionId, EventListener<QuerySnapshot> listener) {
+        return db.collection(COLLECTION_ANSWERS)
+                .whereEqualTo("questionId", questionId)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public List<Answer> mapAnswers(QuerySnapshot snapshot) {
+        List<Answer> list = new ArrayList<>();
+        if (snapshot == null) {
+            return list;
+        }
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Answer answer = doc.toObject(Answer.class);
+            if (answer == null || answer.isHidden()) {
+                continue;
+            }
+            if (answer.getId() == null || answer.getId().isEmpty()) {
+                answer.setId(doc.getId());
+            }
+            list.add(answer);
+        }
+        Collections.sort(list, (a1, a2) -> {
+            int likeCompare = Long.compare(a2.getLikes(), a1.getLikes());
+            if (likeCompare != 0) {
+                return likeCompare;
+            }
+            return Long.compare(a2.getCreatedAt(), a1.getCreatedAt());
+        });
+        return list;
     }
 
     // Xem danh sách câu trả lời theo questionId, sắp xếp theo lượt thích giảm dần, lọc bỏ câu trả lời đã ẩn

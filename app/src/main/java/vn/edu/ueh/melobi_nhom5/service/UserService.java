@@ -16,7 +16,9 @@ import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.SetOptions;
 
 import java.util.ArrayList;
@@ -188,6 +190,10 @@ public class UserService {
             // Không chặn đăng xuất Firebase nếu GoogleSignIn client không khả dụng.
         }
         AuthHelper.signOut();
+    }
+
+    public ListenerRegistration listenProfile(String userId, EventListener<DocumentSnapshot> listener) {
+        return db.collection(COLLECTION_USERS).document(userId).addSnapshotListener(listener);
     }
 
     public void getProfile(String userId, Callback<User> callback) {

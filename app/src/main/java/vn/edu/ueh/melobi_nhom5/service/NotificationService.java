@@ -2,13 +2,17 @@ package vn.edu.ueh.melobi_nhom5.service;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
-import com.google.firebase.firestore.AggregateSource;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.WriteBatch;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.entity.Notification;
 
@@ -17,24 +21,28 @@ public class NotificationService {
     private static final int NOTIFICATION_LIMIT = 50;
     private final FirebaseFirestore db = FirebaseFirestore.getInstance();
 
-    /** Các service khác (Question/Answer/Comment/Follow) gọi hàm này khi có tương tác mới.
-     *  Trả về Task có kết quả null nếu bỏ qua (thiếu receiverId hoặc tự thông báo cho chính mình). */
     public Task<DocumentReference> createNotification(String receiverId, String actorId,
                                                       String type, String targetId,
                                                       String targetType) {
-        if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
+        if (receiverId == null || receiverId.equals(actorId)) {
+            return Tasks.forResult(null);
+        }
         Notification n = new Notification(receiverId, actorId, type, targetId, targetType);
         return db.collection(COL_NOTIFICATIONS).add(n);
-        // TODO pushFCM(n): gửi FCM cần server (Cloud Functions) - hỏi leader trước khi làm
     }
 
-    /** Cần composite index (receiverId + createdAt). Lần chạy đầu Logcat sẽ in link tạo index. */
-    public Task<QuerySnapshot> getNotifications(String userId) {
+    /** Chỉ lọc theo receiverId rồi sắp xếp trên máy, tránh lỗi thiếu composite index. */
+    public Task<List<Notification>> getNotifications(String userId) {
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(NOTIFICATION_LIMIT)
-                .get();
+                .get()
+                .continueWith(task -> mapNotifications(task.getResult()));
+    }
+
+    public ListenerRegistration listenNotifications(String userId, EventListener<QuerySnapshot> listener) {
+        return db.collection(COL_NOTIFICATIONS)
+                .whereEqualTo("receiverId", userId)
+                .addSnapshotListener(listener);
     }
 
     public Task<Void> markAsRead(String notificationId) {
@@ -45,31 +53,59 @@ public class NotificationService {
     public Task<Void> markAllAsRead(String userId) {
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
-                .whereEqualTo("isRead", false)
                 .get()
                 .continueWithTask(task -> {
-                    if (!task.isSuccessful()) throw task.getException();
-                    WriteBatch batch = db.batch(); // tối đa 500 thao tác / batch
-                    for (DocumentSnapshot d : task.getResult()) {
-                        batch.update(d.getReference(), "isRead", true);
+                    if (!task.isSuccessful()) {
+                        throw task.getException();
+                    }
+                    WriteBatch batch = db.batch();
+                    int count = 0;
+                    for (DocumentSnapshot snapshot : task.getResult()) {
+                        Notification notification = snapshot.toObject(Notification.class);
+                        if (notification != null && !notification.getIsRead()) {
+                            batch.update(snapshot.getReference(), "isRead", true);
+                            count++;
+                        }
+                    }
+                    if (count == 0) {
+                        return Tasks.forResult(null);
                     }
                     return batch.commit();
                 });
     }
 
     public Task<Integer> getUnreadCount(String userId) {
-        return db.collection(COL_NOTIFICATIONS)
-                .whereEqualTo("receiverId", userId)
-                .whereEqualTo("isRead", false)
-                .count()
-                .get(AggregateSource.SERVER)
-                .continueWith(task -> (int) task.getResult().getCount());
+        return getNotifications(userId).continueWith(task -> {
+            int count = 0;
+            List<Notification> notifications = task.getResult();
+            if (notifications != null) {
+                for (Notification notification : notifications) {
+                    if (!notification.getIsRead()) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        });
+    }
+
+    public static List<Notification> mapNotifications(QuerySnapshot snapshot) {
+        List<Notification> notifications = new ArrayList<>();
+        if (snapshot == null) {
+            return notifications;
+        }
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Notification notification = doc.toObject(Notification.class);
+            if (notification == null) {
+                continue;
+            }
+            notification.setNotificationId(doc.getId());
+            notifications.add(notification);
+        }
+        Collections.sort(notifications, (left, right) -> Long.compare(right.getCreatedAt(), left.getCreatedAt()));
+        if (notifications.size() > NOTIFICATION_LIMIT) {
+            return new ArrayList<>(notifications.subList(0, NOTIFICATION_LIMIT));
+        }
+        return notifications;
     }
 }
-/* 1 số vấn đề nhỏ sau:
-* receiverId.equals(actorId) sẽ NPE nếu receiverId null (ví dụ caller truyền thiếu ownerId). Vì nó chạy trong listener nên app crash
--> Cách sửa: if (receiverId == null || receiverId.equals(actorId)) return Tasks.forResult(null);
-* getNotifications không giới hạn số lượng
--> Cách sửa: Thêm .limit(50)
-* markAllAsRead dùng task.getResult() mà không kiểm tra task thành công
--> Cách sửa: Thêm if (!task.isSuccessful()) throw task.getException();*/

@@ -1,19 +1,25 @@
 package vn.edu.ueh.melobi_nhom5.service;
 
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.MetadataChanges;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.entity.Like;
 import vn.edu.ueh.melobi_nhom5.model.Question;
@@ -215,6 +221,73 @@ public class QuestionService {
                 .document(Like.buildId(userId, Like.TYPE_QUESTION, questionId))
                 .get()
                 .continueWith(task -> task.getResult().exists());
+    }
+
+    public ListenerRegistration listenQuestions(EventListener<QuerySnapshot> listener) {
+        return db.collection(COL_QUESTIONS)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public ListenerRegistration listenQuestion(String questionId, EventListener<DocumentSnapshot> listener) {
+        return db.collection(COL_QUESTIONS)
+                .document(questionId)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public Task<Set<String>> getLikedQuestionIds(String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            return Tasks.forResult(new HashSet<>());
+        }
+        return db.collection(COL_LIKES)
+                .whereEqualTo("userId", userId)
+                .get()
+                .continueWith(task -> {
+                    Set<String> ids = new HashSet<>();
+                    QuerySnapshot snapshot = task.getResult();
+                    if (snapshot == null) {
+                        return ids;
+                    }
+                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        String type = doc.getString("targetType");
+                        String targetId = doc.getString("targetId");
+                        if ((Like.TYPE_QUESTION.equals(type) || type == null)
+                                && targetId != null && !targetId.trim().isEmpty()) {
+                            ids.add(targetId);
+                        }
+                    }
+                    return ids;
+                });
+    }
+
+    public Task<List<Question>> getLikedQuestions(String userId) {
+        return getLikedQuestionIds(userId).continueWithTask(task -> {
+            Set<String> ids = task.getResult();
+            if (ids == null || ids.isEmpty()) {
+                return Tasks.forResult(new ArrayList<>());
+            }
+            List<Task<DocumentSnapshot>> reads = new ArrayList<>();
+            for (String id : ids) {
+                reads.add(db.collection(COL_QUESTIONS).document(id).get());
+            }
+            return Tasks.whenAllSuccess(reads).continueWith(readTask -> {
+                List<Question> liked = new ArrayList<>();
+                for (Object item : readTask.getResult()) {
+                    if (!(item instanceof DocumentSnapshot)) {
+                        continue;
+                    }
+                    DocumentSnapshot snapshot = (DocumentSnapshot) item;
+                    if (!snapshot.exists()) {
+                        continue;
+                    }
+                    Question question = toQuestion(snapshot);
+                    if (question != null && Question.STATUS_ACTIVE.equals(question.getStatus())) {
+                        liked.add(question);
+                    }
+                }
+                Collections.sort(liked, (left, right) -> Long.compare(right.getCreatedAt(), left.getCreatedAt()));
+                return liked;
+            });
+        });
     }
 
     // ---------- Các hàm service khác gọi sang ----------

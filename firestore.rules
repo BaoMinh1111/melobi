@@ -5,47 +5,88 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return signedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN";
+    }
+
+    function onlyUserCounts() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['followerCount', 'followingCount']);
+    }
+
+    function onlyQuestionCounters() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likeCount', 'answerCount', 'updatedAt']);
+    }
+
     match /users/{userId} {
       allow read: if signedIn();
-      allow write: if signedIn();
+      allow create: if isSelf(userId);
+      allow update: if isSelf(userId) || isAdmin() || (signedIn() && onlyUserCounts());
+      allow delete: if isAdmin();
     }
 
     match /majors/{majorId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /questions/{questionId} {
       allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn()
-          && (resource.data.userId == request.auth.uid
-              || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN");
+      allow create: if signedIn()
+          && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if signedIn()
+          && (resource.data.userId == request.auth.uid || isAdmin() || onlyQuestionCounters());
+      allow delete: if signedIn()
+          && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /answers/{answerId} {
       allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn()
-          && resource.data.userId == request.auth.uid;
+      allow create: if signedIn()
+          && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if signedIn() && (
+          resource.data.userId == request.auth.uid
+          || isAdmin()
+          || request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['likes', 'likeCount', 'likedUserIds'])
+      );
+      allow delete: if signedIn()
+          && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /comments/{commentId} {
       allow read: if signedIn();
-      allow create: if signedIn();
+      allow create: if signedIn()
+          && request.resource.data.userId == request.auth.uid;
       allow update, delete: if signedIn()
-          && resource.data.userId == request.auth.uid;
+          && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /follows/{followId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.followerId == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.followerId == request.auth.uid;
     }
 
     match /notifications/{notificationId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn() && resource.data.receiverId == request.auth.uid;
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && resource.data.receiverId == request.auth.uid;
     }
 
     match /likes/{likeId} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /conversations/{conversationId} {
@@ -53,10 +94,6 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read, write: if signedIn();
       }
-    }
-
-    match /{document=**} {
-      allow read, write: if signedIn();
     }
   }
 }

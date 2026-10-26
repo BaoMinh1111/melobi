@@ -12,7 +12,12 @@
           "package_name": "vn.edu.ueh.melobi_nhom5"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "433632654385-p9lu2g0u1pt7qnkue6oc1nvgm1iitdo3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC4D9YzTt38y1t2tWH-We-GBl_wGckITEA"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "433632654385-p9lu2g0u1pt7qnkue6oc1nvgm1iitdo3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

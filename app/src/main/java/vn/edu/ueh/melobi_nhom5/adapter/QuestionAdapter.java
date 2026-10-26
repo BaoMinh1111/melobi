@@ -4,13 +4,16 @@ import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.R;
 import vn.edu.ueh.melobi_nhom5.model.Question;
@@ -25,9 +28,15 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
         void onAuthorClick(Question question);
     }
 
+    public interface OnLikeClickListener {
+        void onLikeClick(Question question);
+    }
+
     private final List<Question> questionList = new ArrayList<>();
+    private final Set<String> likedQuestionIds = new HashSet<>();
     private final OnQuestionClickListener listener;
     private final OnAuthorClickListener authorClickListener;
+    private OnLikeClickListener likeClickListener;
 
     public QuestionAdapter(OnQuestionClickListener listener) {
         this(listener, null);
@@ -36,6 +45,18 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
     public QuestionAdapter(OnQuestionClickListener listener, OnAuthorClickListener authorClickListener) {
         this.listener = listener;
         this.authorClickListener = authorClickListener;
+    }
+
+    public void setOnLikeClickListener(OnLikeClickListener likeClickListener) {
+        this.likeClickListener = likeClickListener;
+    }
+
+    public void setLikedQuestionIds(Set<String> ids) {
+        likedQuestionIds.clear();
+        if (ids != null) {
+            likedQuestionIds.addAll(ids);
+        }
+        notifyDataSetChanged();
     }
 
     public void setQuestions(List<Question> newQuestions) {
@@ -64,7 +85,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
     @Override
     public void onBindViewHolder(@NonNull QuestionViewHolder holder, int position) {
         Question question = questionList.get(position);
-        holder.bind(question, listener, authorClickListener);
+        holder.bind(question, listener, authorClickListener, likeClickListener, likedQuestionIds);
     }
 
     @Override
@@ -80,6 +101,9 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
         private final TextView tvMainContent;
         private final TextView tvMainAuthorName;
         private final TextView tvMainTime;
+        private final View btnQuestionLike;
+        private final ImageView ivQuestionLike;
+        private final TextView tvQuestionLikeCount;
 
         public QuestionViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -90,9 +114,16 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             tvMainContent = itemView.findViewById(R.id.tvMainContent);
             tvMainAuthorName = itemView.findViewById(R.id.tvMainAuthorName);
             tvMainTime = itemView.findViewById(R.id.tvMainTime);
+            btnQuestionLike = itemView.findViewById(R.id.btnQuestionLike);
+            ivQuestionLike = itemView.findViewById(R.id.ivQuestionLike);
+            tvQuestionLikeCount = itemView.findViewById(R.id.tvQuestionLikeCount);
         }
 
-        public void bind(Question question, OnQuestionClickListener listener, OnAuthorClickListener authorClickListener) {
+        public void bind(Question question,
+                         OnQuestionClickListener listener,
+                         OnAuthorClickListener authorClickListener,
+                         OnLikeClickListener likeClickListener,
+                         Set<String> likedQuestionIds) {
             tvMainCategory.setText(question.getCategory() != null ? question.getCategory() : "Khác");
             tvMainAnswerCount.setText(question.getAnswerCount() + " câu trả lời");
             tvMainTitle.setText(question.getTitle());
@@ -108,6 +139,25 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             tvMainAuthorName.setText(authorName);
             tvMainAvatar.setText(authorName.substring(0, 1).toUpperCase());
             tvMainTime.setText(relativeTime);
+
+            boolean liked = likedQuestionIds != null && likedQuestionIds.contains(question.getId());
+            if (tvQuestionLikeCount != null) {
+                tvQuestionLikeCount.setText(String.valueOf(question.getLikeCount()));
+                tvQuestionLikeCount.setTextColor(itemView.getResources().getColor(
+                        liked ? R.color.like_active : R.color.text_secondary, itemView.getContext().getTheme()));
+            }
+            if (ivQuestionLike != null) {
+                ivQuestionLike.setImageResource(liked ? R.drawable.ic_thumb_up_filled : R.drawable.ic_thumb_up);
+                ivQuestionLike.setColorFilter(itemView.getResources().getColor(
+                        liked ? R.color.like_active : R.color.text_secondary, itemView.getContext().getTheme()));
+            }
+            if (btnQuestionLike != null) {
+                btnQuestionLike.setOnClickListener(v -> {
+                    if (likeClickListener != null) {
+                        likeClickListener.onLikeClick(question);
+                    }
+                });
+            }
 
             View.OnClickListener openAuthor = v -> {
                 if (authorClickListener != null) {

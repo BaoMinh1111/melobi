@@ -61,8 +61,12 @@
     <string name="hint_bio">Giới thiệu ngắn về bạn</string>
     <string name="label_follower_count">Người theo dõi</string>
     <string name="label_following_count">Đang theo dõi</string>
+    <string name="label_followers">Người theo dõi: %d</string>
+    <string name="label_following">Đang theo dõi: %d</string>
+    <string name="error_empty_password">Mật khẩu không được để trống</string>
+    <string name="error_invalid_email">Email không hợp lệ</string>
     <string name="hint_avatar_status">Chưa có ảnh đại diện</string>
-    <string name="google_web_client_id"></string>
+    <string name="google_web_client_id">433632654385-p9lu2g0u1pt7qnkue6oc1nvgm1iitdo3.apps.googleusercontent.com</string>
     <string name="action_admin">Quản trị</string>
     <string name="message_admin_signed_in">Đăng nhập với quyền quản trị</string>
     <string name="error_admin_forbidden">Bạn không có quyền truy cập trang quản trị</string>
@@ -120,4 +124,14 @@
     <string name="notification_follow">%1$s đã theo dõi bạn</string>
     <string name="notification_generic">Bạn có thông báo mới từ %1$s</string>
     <string name="notification_someone">Ai đó</string>
+    <string name="title_liked_questions">Bài viết đã thích</string>
+    <string name="empty_liked_questions">Chưa thích bài viết nào.</string>
+    <string name="title_followers">Người theo dõi</string>
+    <string name="title_following">Đang theo dõi</string>
+    <string name="empty_follow_list">Danh sách trống.</string>
+    <string name="error_email_required">Vui lòng nhập email</string>
+    <string name="error_email_invalid">Email không đúng định dạng</string>
+    <string name="error_password_required">Vui lòng nhập mật khẩu</string>
+    <string name="error_login_credentials">Email hoặc mật khẩu không chính xác</string>
+    <string name="error_google_client_missing">Chưa cấu hình Google Web Client ID. Vào Firebase Console &gt; Authentication &gt; Google, bật đăng nhập Google rồi tải lại google-services.json.</string>
 </resources>

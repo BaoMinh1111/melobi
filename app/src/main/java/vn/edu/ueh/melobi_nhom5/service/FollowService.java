@@ -190,6 +190,57 @@ public class FollowService {
         loadIds(userId, false, callback);
     }
 
+    public void getFollowUsers(String userId, boolean followers, Callback<List<User>> callback) {
+        Callback<List<String>> idsCallback = new Callback<List<String>>() {
+            @Override
+            public void onSuccess(List<String> ids) {
+                if (ids == null || ids.isEmpty()) {
+                    if (callback != null) {
+                        callback.onSuccess(new ArrayList<>());
+                    }
+                    return;
+                }
+                if (db == null) {
+                    if (callback != null) {
+                        callback.onSuccess(new ArrayList<>());
+                    }
+                    return;
+                }
+                List<User> users = new ArrayList<>();
+                int[] remaining = {ids.size()};
+                for (String id : ids) {
+                    db.collection(COL_USERS).document(id).get().addOnCompleteListener(task -> {
+                        if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
+                            User user = task.getResult().toObject(User.class);
+                            if (user != null) {
+                                if (user.getUserId() == null || user.getUserId().trim().isEmpty()) {
+                                    user.setUserId(id);
+                                }
+                                users.add(user);
+                            }
+                        }
+                        remaining[0]--;
+                        if (remaining[0] == 0 && callback != null) {
+                            callback.onSuccess(users);
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (callback != null) {
+                    callback.onError(e);
+                }
+            }
+        };
+        if (followers) {
+            getFollowers(userId, idsCallback);
+        } else {
+            getFollowing(userId, idsCallback);
+        }
+    }
+
     public List<String> getFollowedQuestions(String userId) {
         validateUserId(userId);
         List<String> result = new ArrayList<>();
@@ -445,11 +496,14 @@ public class FollowService {
         String field = followers ? "targetId" : "followerId";
         db.collection(COL_FOLLOWS)
                 .whereEqualTo(field, userId)
-                .whereEqualTo("targetType", TARGET_USER)
                 .get()
                 .addOnSuccessListener(snapshot -> {
                     List<String> ids = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                        String type = doc.getString("targetType");
+                        if (type != null && !TARGET_USER.equals(type)) {
+                            continue;
+                        }
                         String value = followers ? doc.getString("followerId") : doc.getString("targetId");
                         if (value != null && !value.trim().isEmpty()) {
                             ids.add(value);

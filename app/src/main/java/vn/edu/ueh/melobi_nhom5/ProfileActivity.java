@@ -19,6 +19,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -27,6 +28,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.io.InputStream;
 import java.net.URL;
@@ -34,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import vn.edu.ueh.melobi_nhom5.adapter.FollowUserAdapter;
 import vn.edu.ueh.melobi_nhom5.adapter.ProfileAnswerAdapter;
 import vn.edu.ueh.melobi_nhom5.adapter.QuestionAdapter;
 import vn.edu.ueh.melobi_nhom5.model.Answer;
@@ -41,6 +44,7 @@ import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.Question;
 import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.FollowService;
+import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
@@ -88,11 +92,18 @@ public class ProfileActivity extends AppCompatActivity {
     private ProgressBar pbProfile;
     private RecyclerView rvProfileQuestions;
     private RecyclerView rvProfileAnswers;
+    private RecyclerView rvLikedQuestions;
     private TextView tvEmptyQuestions;
     private TextView tvEmptyAnswers;
+    private TextView tvEmptyLiked;
+    private TextView tvLikedTitle;
 
     private UserService userService;
     private FollowService followService;
+    private QuestionService questionService;
+    private QuestionAdapter likedAdapter;
+    private ListenerRegistration profileListener;
+    private ListenerRegistration questionsListener;
     private FirebaseStorageManager firebaseStorageManager;
     private QuestionAdapter questionAdapter;
     private ProfileAnswerAdapter answerAdapter;
@@ -129,6 +140,7 @@ public class ProfileActivity extends AppCompatActivity {
 
         userService = new UserService();
         followService = new FollowService();
+        questionService = new QuestionService();
         firebaseStorageManager = new FirebaseStorageManager();
 
         String currentUserId = AuthHelper.getCurrentUserId();
@@ -167,8 +179,11 @@ public class ProfileActivity extends AppCompatActivity {
         pbProfile = findViewById(R.id.pbProfile);
         rvProfileQuestions = findViewById(R.id.rvProfileQuestions);
         rvProfileAnswers = findViewById(R.id.rvProfileAnswers);
+        rvLikedQuestions = findViewById(R.id.rvLikedQuestions);
         tvEmptyQuestions = findViewById(R.id.tvEmptyQuestions);
         tvEmptyAnswers = findViewById(R.id.tvEmptyAnswers);
+        tvEmptyLiked = findViewById(R.id.tvEmptyLiked);
+        tvLikedTitle = findViewById(R.id.tvLikedTitle);
 
         questionAdapter = new QuestionAdapter(question -> {
             Intent intent = new Intent(this, QuestionDetailActivity.class);
@@ -177,6 +192,16 @@ public class ProfileActivity extends AppCompatActivity {
         }, null);
         rvProfileQuestions.setLayoutManager(new LinearLayoutManager(this));
         rvProfileQuestions.setAdapter(questionAdapter);
+
+        likedAdapter = new QuestionAdapter(question -> {
+            Intent intent = new Intent(this, QuestionDetailActivity.class);
+            intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
+            startActivity(intent);
+        }, null);
+        if (rvLikedQuestions != null) {
+            rvLikedQuestions.setLayoutManager(new LinearLayoutManager(this));
+            rvLikedQuestions.setAdapter(likedAdapter);
+        }
 
         answerAdapter = new ProfileAnswerAdapter(answer -> {
             Intent intent = new Intent(this, QuestionDetailActivity.class);
@@ -197,6 +222,8 @@ public class ProfileActivity extends AppCompatActivity {
         });
         btnFollowProfile.setOnClickListener(v -> toggleFollow());
         btnMessageProfile.setOnClickListener(v -> openChat());
+        tvFollowerCount.setOnClickListener(v -> showFollowList(true));
+        tvFollowingCount.setOnClickListener(v -> showFollowList(false));
         applyViewMode();
     }
 
@@ -210,6 +237,16 @@ public class ProfileActivity extends AppCompatActivity {
         etProfileBio.setEnabled(viewingSelf);
         spinnerProfileMajor.setEnabled(viewingSelf);
         toolbarProfile.setTitle(viewingSelf ? getString(R.string.title_profile) : getString(R.string.title_member_profile));
+        int likedVisibility = viewingSelf ? View.VISIBLE : View.GONE;
+        if (tvLikedTitle != null) {
+            tvLikedTitle.setVisibility(likedVisibility);
+        }
+        if (rvLikedQuestions != null) {
+            rvLikedQuestions.setVisibility(likedVisibility);
+        }
+        if (tvEmptyLiked != null && !viewingSelf) {
+            tvEmptyLiked.setVisibility(View.GONE);
+        }
     }
 
     private void loadMajors() {
@@ -242,27 +279,34 @@ public class ProfileActivity extends AppCompatActivity {
             navigateToLogin();
             return;
         }
+        if (profileListener != null) {
+            return;
+        }
 
         setLoading(true);
-        userService.getProfile(targetUserId, new UserService.Callback<User>() {
-            @Override
-            public void onSuccess(User result) {
-                setLoading(false);
-                currentProfile = result;
+        profileListener = userService.listenProfile(targetUserId, (snapshot, error) -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            setLoading(false);
+            if (error != null || snapshot == null || !snapshot.exists()) {
                 if (currentProfile == null) {
                     currentProfile = new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
+                    bindProfile();
                 }
-                bindProfile();
-                if (!viewingSelf) {
-                    refreshFollowState();
-                }
+                return;
             }
-
-            @Override
-            public void onError(Exception e) {
-                setLoading(false);
-                currentProfile = new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
-                bindProfile();
+            User result = snapshot.toObject(User.class);
+            if (result != null && (result.getUserId() == null || result.getUserId().trim().isEmpty())) {
+                result.setUserId(snapshot.getId());
+            }
+            currentProfile = result != null
+                    ? result
+                    : new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
+            bindProfile();
+            refreshFollowCounts();
+            if (!viewingSelf) {
+                refreshFollowState();
             }
         });
     }
@@ -350,22 +394,30 @@ public class ProfileActivity extends AppCompatActivity {
 
     private void loadHistory() {
         FirebaseFirestore db = FirebaseFirestore.getInstance();
-        db.collection("questions")
-                .whereEqualTo("userId", targetUserId)
-                .get()
-                .addOnSuccessListener(snapshot -> {
-                    List<Question> questions = new ArrayList<>();
-                    for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                        Question question = mapQuestion(doc);
-                        if (question != null) {
-                            questions.add(question);
+        if (questionsListener == null) {
+            questionsListener = db.collection("questions")
+                    .whereEqualTo("userId", targetUserId)
+                    .addSnapshotListener((snapshot, error) -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
                         }
-                    }
-                    Collections.sort(questions, (a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()));
-                    tvEmptyQuestions.setVisibility(questions.isEmpty() ? View.VISIBLE : View.GONE);
-                    questionAdapter.setQuestions(questions);
-                })
-                .addOnFailureListener(e -> tvEmptyQuestions.setVisibility(View.VISIBLE));
+                        if (error != null || snapshot == null) {
+                            tvEmptyQuestions.setVisibility(View.VISIBLE);
+                            return;
+                        }
+                        List<Question> questions = new ArrayList<>();
+                        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                            Question question = mapQuestion(doc);
+                            if (question != null) {
+                                questions.add(question);
+                            }
+                        }
+                        Collections.sort(questions, (a, b) -> Long.compare(b.getCreatedAt(), a.getCreatedAt()));
+                        tvEmptyQuestions.setVisibility(questions.isEmpty() ? View.VISIBLE : View.GONE);
+                        questionAdapter.setQuestions(questions);
+                    });
+        }
+        loadLikedQuestions();
 
         db.collection("answers")
                 .whereEqualTo("userId", targetUserId)
@@ -396,6 +448,100 @@ public class ProfileActivity extends AppCompatActivity {
             return null;
         }
         return question;
+    }
+
+    private void loadLikedQuestions() {
+        if (!viewingSelf || rvLikedQuestions == null || likedAdapter == null) {
+            return;
+        }
+        questionService.getLikedQuestions(targetUserId)
+                .addOnSuccessListener(result -> {
+                    List<Question> liked = result != null ? result : new ArrayList<>();
+                    likedAdapter.setQuestions(liked);
+                    if (tvEmptyLiked != null) {
+                        tvEmptyLiked.setVisibility(liked.isEmpty() ? View.VISIBLE : View.GONE);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (tvEmptyLiked != null) {
+                        tvEmptyLiked.setVisibility(View.VISIBLE);
+                    }
+                });
+    }
+
+    private void refreshFollowCounts() {
+        followService.getFollowUsers(targetUserId, true, new FollowService.Callback<List<User>>() {
+            @Override
+            public void onSuccess(List<User> result) {
+                int count = result != null ? result.size() : 0;
+                tvFollowerCount.setText(getString(R.string.label_followers, count));
+            }
+
+            @Override
+            public void onError(Exception e) {
+            }
+        });
+        followService.getFollowUsers(targetUserId, false, new FollowService.Callback<List<User>>() {
+            @Override
+            public void onSuccess(List<User> result) {
+                int count = result != null ? result.size() : 0;
+                tvFollowingCount.setText(getString(R.string.label_following, count));
+            }
+
+            @Override
+            public void onError(Exception e) {
+            }
+        });
+    }
+
+    private void showFollowList(boolean followers) {
+        View content = getLayoutInflater().inflate(R.layout.dialog_user_list, null, false);
+        RecyclerView rv = content.findViewById(R.id.rvDialogUsers);
+        TextView empty = content.findViewById(R.id.tvDialogUsersEmpty);
+        ProgressBar progress = content.findViewById(R.id.pbDialogUsers);
+        rv.setLayoutManager(new LinearLayoutManager(this));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(followers ? R.string.title_followers : R.string.title_following)
+                .setView(content)
+                .setNegativeButton(android.R.string.ok, null)
+                .create();
+
+        FollowUserAdapter adapter = new FollowUserAdapter(
+                AuthHelper.getCurrentUserId(),
+                null,
+                user -> {
+                    dialog.dismiss();
+                    Intent intent = new Intent(this, ProfileActivity.class);
+                    intent.putExtra(EXTRA_USER_ID, user.getUserId());
+                    intent.putExtra(EXTRA_USER_NAME, user.getFullName());
+                    startActivity(intent);
+                });
+        adapter.setHideFollowButton(true);
+        rv.setAdapter(adapter);
+
+        followService.getFollowUsers(targetUserId, followers, new FollowService.Callback<List<User>>() {
+            @Override
+            public void onSuccess(List<User> result) {
+                progress.setVisibility(View.GONE);
+                List<User> users = result != null ? result : new ArrayList<>();
+                adapter.setUsers(users);
+                empty.setVisibility(users.isEmpty() ? View.VISIBLE : View.GONE);
+                if (followers) {
+                    tvFollowerCount.setText(getString(R.string.label_followers, users.size()));
+                } else {
+                    tvFollowingCount.setText(getString(R.string.label_following, users.size()));
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                progress.setVisibility(View.GONE);
+                empty.setVisibility(View.VISIBLE);
+                empty.setText(e.getMessage());
+            }
+        });
+        dialog.show();
     }
 
     private void syncMajorSelection() {
@@ -611,6 +757,28 @@ public class ProfileActivity extends AppCompatActivity {
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
         finish();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (targetUserId != null && !targetUserId.isEmpty()) {
+            refreshFollowCounts();
+            loadLikedQuestions();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (profileListener != null) {
+            profileListener.remove();
+            profileListener = null;
+        }
+        if (questionsListener != null) {
+            questionsListener.remove();
+            questionsListener = null;
+        }
+        super.onDestroy();
     }
 
     private void navigateToLogin() {

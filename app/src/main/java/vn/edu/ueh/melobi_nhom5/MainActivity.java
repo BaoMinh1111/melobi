@@ -24,15 +24,19 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.gms.tasks.Task;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.chip.ChipGroup;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.adapter.FollowUserAdapter;
 import vn.edu.ueh.melobi_nhom5.adapter.NotificationAdapter;
@@ -104,6 +108,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvNotificationBadge;
     private TextView tvNavAvatar;
     private String currentTab = TAB_HOME;
+    private ListenerRegistration questionsListener;
+    private ListenerRegistration notificationsListener;
+    private final Set<String> likedQuestionIds = new HashSet<>();
+    private boolean sampleInitAttempted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -334,6 +342,7 @@ public class MainActivity extends AppCompatActivity {
                 question.getUserId(),
                 question.getUserName()
         ));
+        questionAdapter.setOnLikeClickListener(this::toggleQuestionLike);
 
         suggestionAdapter = new FollowUserAdapter(
                 currentUser.getId(),
@@ -671,32 +680,67 @@ public class MainActivity extends AppCompatActivity {
 
         pbMainLoading.setVisibility(View.VISIBLE);
         tvMainEmpty.setVisibility(View.GONE);
+        refreshLikedQuestionIds();
+        if (questionsListener != null) {
+            return;
+        }
 
-        FirebaseFirestore.getInstance().collection("questions")
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    pbMainLoading.setVisibility(View.GONE);
-                    List<Question> list = new ArrayList<>();
-                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                        Question q = QuestionService.toQuestion(doc);
-                        if (q != null) {
-                            list.add(q);
-                        }
+        questionsListener = questionService.listenQuestions((snapshot, error) -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            pbMainLoading.setVisibility(View.GONE);
+            if (error != null) {
+                Log.e(TAG, "Lỗi lắng nghe câu hỏi: ", error);
+                showCachedQuestions();
+                return;
+            }
+            List<Question> list = new ArrayList<>();
+            if (snapshot != null) {
+                for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                    Question q = QuestionService.toQuestion(doc);
+                    if (q != null && Question.STATUS_ACTIVE.equals(q.getStatus())) {
+                        list.add(q);
                     }
+                }
+            }
+            if (list.isEmpty() && !sampleInitAttempted) {
+                sampleInitAttempted = true;
+                initSampleData();
+                return;
+            }
+            bindQuestionList(list);
+            syncManager.cacheQuestions(list);
+        });
+    }
 
-                    if (list.isEmpty()) {
-                        initSampleData();
-                        return;
+    private void refreshLikedQuestionIds() {
+        if (currentUser == null) {
+            return;
+        }
+        questionService.getLikedQuestionIds(currentUser.getUserId())
+                .addOnSuccessListener(ids -> {
+                    likedQuestionIds.clear();
+                    if (ids != null) {
+                        likedQuestionIds.addAll(ids);
                     }
-
-                    bindQuestionList(list);
-                    syncManager.cacheQuestions(list);
-                })
-                .addOnFailureListener(e -> {
-                    pbMainLoading.setVisibility(View.GONE);
-                    Log.e(TAG, "Lỗi tải câu hỏi: ", e);
-                    showCachedQuestions();
+                    if (questionAdapter != null) {
+                        questionAdapter.setLikedQuestionIds(likedQuestionIds);
+                    }
                 });
+    }
+
+    private void toggleQuestionLike(Question question) {
+        if (question == null || currentUser == null) {
+            return;
+        }
+        String questionId = question.getId();
+        boolean liked = likedQuestionIds.contains(questionId);
+        Task<Boolean> task = liked
+                ? questionService.unlikeQuestion(questionId, currentUser.getUserId())
+                : questionService.likeQuestion(questionId, question.getUserId(), currentUser.getUserId());
+        task.addOnSuccessListener(changed -> refreshLikedQuestionIds())
+                .addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
     private void showCachedQuestions() {
@@ -743,12 +787,23 @@ public class MainActivity extends AppCompatActivity {
         if (rvQuestions == null || questionAdapter == null) {
             return;
         }
-        if (TAB_HOME.equals(currentTab) || TAB_SEARCH.equals(currentTab)) {
-            loadQuestions();
-        }
+        refreshLikedQuestionIds();
         if (TAB_NOTIFICATIONS.equals(currentTab)) {
             loadNotifications();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (questionsListener != null) {
+            questionsListener.remove();
+            questionsListener = null;
+        }
+        if (notificationsListener != null) {
+            notificationsListener.remove();
+            notificationsListener = null;
+        }
+        super.onDestroy();
     }
 
     private void setupBottomNav() {
@@ -950,46 +1005,36 @@ public class MainActivity extends AppCompatActivity {
         if (notificationService == null || currentUser == null || notificationAdapter == null) {
             return;
         }
+        if (notificationsListener != null) {
+            return;
+        }
         if (pbNotifications != null) {
             pbNotifications.setVisibility(View.VISIBLE);
         }
-        notificationService.getNotifications(currentUser.getUserId())
-                .addOnSuccessListener(snapshot -> {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    if (pbNotifications != null) {
-                        pbNotifications.setVisibility(View.GONE);
-                    }
-                    List<Notification> notifications = new ArrayList<>();
-                    if (snapshot != null) {
-                        for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                            Notification notification = doc.toObject(Notification.class);
-                            if (notification == null) {
-                                continue;
-                            }
-                            notification.setNotificationId(doc.getId());
-                            notifications.add(notification);
-                        }
-                    }
-                    notificationAdapter.setNotifications(notifications);
-                    if (tvNotificationEmpty != null) {
-                        tvNotificationEmpty.setVisibility(notifications.isEmpty() ? View.VISIBLE : View.GONE);
-                    }
-                    for (Notification notification : notifications) {
-                        resolveActorName(notification.getActorId());
-                    }
-                    refreshNotificationBadge();
-                })
-                .addOnFailureListener(e -> {
-                    if (pbNotifications != null) {
-                        pbNotifications.setVisibility(View.GONE);
-                    }
-                    if (tvNotificationEmpty != null) {
-                        tvNotificationEmpty.setVisibility(View.VISIBLE);
-                    }
-                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
-                });
+        notificationsListener = notificationService.listenNotifications(currentUser.getUserId(), (snapshot, error) -> {
+            if (isFinishing() || isDestroyed()) {
+                return;
+            }
+            if (pbNotifications != null) {
+                pbNotifications.setVisibility(View.GONE);
+            }
+            if (error != null) {
+                if (tvNotificationEmpty != null) {
+                    tvNotificationEmpty.setVisibility(View.VISIBLE);
+                }
+                Toast.makeText(this, error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            List<Notification> items = NotificationService.mapNotifications(snapshot);
+            notificationAdapter.setNotifications(items);
+            if (tvNotificationEmpty != null) {
+                tvNotificationEmpty.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+            }
+            for (Notification notification : items) {
+                resolveActorName(notification.getActorId());
+            }
+            refreshNotificationBadge();
+        });
     }
 
     private void resolveActorName(String actorId) {

@@ -125,6 +125,38 @@
                         android:textColor="#3C4043"
                         android:textSize="14sp"
                         tools:text="Nội dung câu hỏi" />
+
+                    <LinearLayout
+                        android:id="@+id/btnQuestionLike"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="6dp">
+
+                        <ImageView
+                            android:id="@+id/ivQuestionLike"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@string/action_like"
+                            android:src="@drawable/ic_thumb_up"
+                            app:tint="@color/text_secondary" />
+
+                        <TextView
+                            android:id="@+id/tvQuestionLikeCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp"
+                            android:textStyle="bold"
+                            tools:text="0 Thích" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </ScrollView>
