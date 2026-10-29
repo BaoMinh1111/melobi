@@ -62,6 +62,17 @@
         android:orientation="horizontal"
         android:padding="8dp">
 
+        <ImageButton
+            android:id="@+id/btnAttachImage"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_avatar_circle"
+            android:contentDescription="@string/button_attach_chat_image"
+            android:src="@drawable/ic_image"
+            android:visibility="gone"
+            app:tint="@color/white" />
+
         <EditText
             android:id="@+id/etMessageInput"
             android:layout_width="0dp"

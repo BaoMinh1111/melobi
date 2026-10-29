@@ -7,6 +7,17 @@
     android:orientation="vertical"
     android:paddingVertical="4dp">
 
+    <ImageView
+        android:id="@+id/ivMessageImage"
+        android:layout_width="180dp"
+        android:layout_height="180dp"
+        android:layout_marginStart="64dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/bg_chat_bubble_sent"
+        android:contentDescription="@string/label_image_message"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/tvMessageContent"
         android:layout_width="wrap_content"

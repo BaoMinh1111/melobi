@@ -4,6 +4,7 @@ import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -68,6 +69,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
     static class MessageViewHolder extends RecyclerView.ViewHolder {
         private final TextView tvMessageContent;
         private final TextView tvMessageStatus;
+        private final ImageView ivMessageImage;
         private final boolean sent;
 
         MessageViewHolder(@NonNull View itemView, boolean sent) {
@@ -75,10 +77,23 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
             this.sent = sent;
             tvMessageContent = itemView.findViewById(R.id.tvMessageContent);
             tvMessageStatus = itemView.findViewById(R.id.tvMessageStatus);
+            ivMessageImage = itemView.findViewById(R.id.ivMessageImage);
         }
 
         void bind(Message message) {
-            tvMessageContent.setText(message.getContent() != null ? message.getContent() : "");
+            String content = message.getContent() != null ? message.getContent() : "";
+            if (content.trim().isEmpty()) {
+                tvMessageContent.setVisibility(View.GONE);
+            } else {
+                tvMessageContent.setVisibility(View.VISIBLE);
+                tvMessageContent.setText(content);
+            }
+
+            if (ivMessageImage != null) {
+                ivMessageImage.setTag(null);
+                ivMessageImage.setImageDrawable(null);
+                ivMessageImage.setVisibility(View.GONE);
+            }
 
             String timeText = "";
             Date sentAt = message.getSentAt();

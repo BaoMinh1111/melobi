@@ -11,6 +11,7 @@ public class Message {
     private String conversationId;
     private String senderId;
     private String content;
+    private String imageUrl;
     private Date sentAt;
     private boolean isRead;
 
@@ -61,6 +62,14 @@ public class Message {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
     }
 
     public Date getSentAt() {

@@ -27,6 +27,7 @@ import vn.edu.ueh.melobi_nhom5.service.ChatService;
 import vn.edu.ueh.melobi_nhom5.service.FollowService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 public class ChatListActivity extends AppCompatActivity {
 
@@ -48,6 +49,12 @@ public class ChatListActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
         if (!AuthHelper.isLoggedIn()) {
             navigateToLogin();

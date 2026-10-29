@@ -55,7 +55,7 @@ service cloud.firestore {
           resource.data.userId == request.auth.uid
           || isAdmin()
           || request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['likes', 'likeCount', 'likedUserIds'])
+              .hasOnly(['likes', 'likeCount', 'likedUserIds', 'commentCount'])
       );
       allow delete: if signedIn()
           && (resource.data.userId == request.auth.uid || isAdmin());

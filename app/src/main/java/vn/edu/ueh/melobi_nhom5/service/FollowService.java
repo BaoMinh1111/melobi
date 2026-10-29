@@ -211,11 +211,8 @@ public class FollowService {
                 for (String id : ids) {
                     db.collection(COL_USERS).document(id).get().addOnCompleteListener(task -> {
                         if (task.isSuccessful() && task.getResult() != null && task.getResult().exists()) {
-                            User user = task.getResult().toObject(User.class);
+                            User user = UserService.fromSnapshot(task.getResult());
                             if (user != null) {
-                                if (user.getUserId() == null || user.getUserId().trim().isEmpty()) {
-                                    user.setUserId(id);
-                                }
                                 users.add(user);
                             }
                         }
@@ -269,12 +266,9 @@ public class FollowService {
                     String myMajor = majorId;
                     if (snapshot != null) {
                         for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                            User user = doc.toObject(User.class);
+                            User user = UserService.fromSnapshot(doc);
                             if (user == null) {
                                 continue;
-                            }
-                            if (user.getUserId() == null || user.getUserId().trim().isEmpty()) {
-                                user.setUserId(doc.getId());
                             }
                             if (currentUserId != null && currentUserId.equals(user.getUserId())) {
                                 if (user.getMajorId() != null && !user.getMajorId().trim().isEmpty()) {

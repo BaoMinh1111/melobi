@@ -54,7 +54,9 @@ public class User {
     public String getId() { return userId; }
     public void setId(String userId) { this.userId = userId; }
 
+    @Exclude
     public String getDisplayName() { return fullName; }
+    @Exclude
     public void setDisplayName(String displayName) { this.fullName = displayName; }
 
     public String getUserId() { return userId; }

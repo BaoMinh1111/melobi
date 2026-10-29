@@ -31,6 +31,7 @@ import java.util.UUID;
 import vn.edu.ueh.melobi_nhom5.entity.Conversation;
 import vn.edu.ueh.melobi_nhom5.entity.Message;
 import vn.edu.ueh.melobi_nhom5.entity.Notification;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 /**
  * ChatService theo tài liệu: createConversation, sendMessage, getMessages,
@@ -53,6 +54,9 @@ public class ChatService {
     }
 
     public Task<Conversation> createConversation(String user1Id, String user2Id) {
+        if (!NetworkUtils.isOnline()) {
+            return Tasks.forException(NetworkUtils.offlineException());
+        }
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             return Tasks.forException(new IllegalStateException("Chua dang nhap"));
         }
@@ -83,26 +87,34 @@ public class ChatService {
     }
 
     public Task<Message> sendMessage(String conversationId, String senderId, String content) {
+        return sendMessage(conversationId, senderId, content, null);
+    }
+
+    public Task<Message> sendMessage(String conversationId, String senderId, String content, String imageUrl) {
+        if (!NetworkUtils.isOnline()) {
+            return Tasks.forException(NetworkUtils.offlineException());
+        }
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             return Tasks.forException(new IllegalStateException("Chua dang nhap"));
         }
         if (isInvalidId(conversationId) || isInvalidId(senderId)) {
             return Tasks.forException(new IllegalArgumentException("ID khong duoc de trong"));
         }
-        if (content == null || content.trim().isEmpty()) {
+        boolean hasImage = imageUrl != null && !imageUrl.trim().isEmpty();
+        String text = content != null ? content.trim() : "";
+        if (text.isEmpty() && !hasImage) {
             return Tasks.forException(new IllegalArgumentException("Tin nhan khong duoc de trong"));
         }
-
-        String text = content.trim();
         if (text.length() > CONTENT_LIMIT) {
             return Tasks.forException(new IllegalArgumentException("Tin nhan vuot qua 2000 ky tu"));
         }
 
         DocumentReference conversationRef = db.collection(COL_CONVERSATIONS).document(conversationId);
         DocumentReference messageRef = conversationRef.collection(COL_MESSAGES).document();
-        String preview = text.length() > LAST_MESSAGE_PREVIEW_LIMIT
-                ? text.substring(0, LAST_MESSAGE_PREVIEW_LIMIT)
-                : text;
+        String previewSource = !text.isEmpty() ? text : "[Ảnh]";
+        String preview = previewSource.length() > LAST_MESSAGE_PREVIEW_LIMIT
+                ? previewSource.substring(0, LAST_MESSAGE_PREVIEW_LIMIT)
+                : previewSource;
         Date now = new Date();
 
         Message message = new Message(
@@ -119,6 +131,10 @@ public class ChatService {
         messageData.put("conversationId", conversationId);
         messageData.put("senderId", senderId);
         messageData.put("content", text);
+        if (hasImage) {
+            messageData.put("imageUrl", imageUrl);
+            message.setImageUrl(imageUrl);
+        }
         messageData.put("sentAt", now);
         messageData.put("isRead", false);
 
@@ -333,6 +349,9 @@ public class ChatService {
                 }
             }
             message.setMessageId(doc.getId());
+            if (message.getImageUrl() == null || message.getImageUrl().trim().isEmpty()) {
+                message.setImageUrl(doc.getString("imageUrl"));
+            }
             messages.add(message);
         }
         return messages;

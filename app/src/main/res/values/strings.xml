@@ -25,6 +25,11 @@
     <string name="action_delete">Xóa</string>
     <string name="action_like">Thích</string>
     <string name="action_comment">Bình luận</string>
+    <string name="action_reply">Trả lời</string>
+    <string name="hint_reply_comment">Trả lời %1$s</string>
+    <string name="label_replying_to">Đang trả lời %1$s</string>
+    <string name="label_image_message">[Ảnh]</string>
+    <string name="button_attach_chat_image">Gửi ảnh</string>
     <string name="action_init_sample_data">Khởi tạo dữ liệu mẫu Firestore (Dev)</string>
     <string name="action_logout">Đăng xuất</string>
     <string name="desc_back">Quay lại</string>

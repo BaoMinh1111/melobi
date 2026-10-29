@@ -93,8 +93,8 @@ public class AnswerAdapter extends RecyclerView.Adapter<AnswerAdapter.AnswerView
         }
 
         public void bind(Answer answer, String currentUserId, OnAnswerActionListener listener) {
-            String authorName = answer.getUserName() != null && !answer.getUserName().isEmpty()
-                    ? answer.getUserName() : "Người dùng";
+            String authorName = vn.edu.ueh.melobi_nhom5.util.UserNameLookup.resolve(
+                    answer.getUserId(), answer.getUserName());
             tvAuthorName.setText(authorName);
 
             String initial = authorName.substring(0, 1).toUpperCase();

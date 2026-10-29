@@ -24,8 +24,7 @@ public class MelobiApplication extends Application {
     private void enableFirestorePersistence() {
         try {
             FirebaseFirestoreSettings settings = new FirebaseFirestoreSettings.Builder()
-                    .setPersistenceEnabled(true)
-                    .setCacheSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                    .setPersistenceEnabled(false)
                     .build();
             FirebaseFirestore.getInstance().setFirestoreSettings(settings);
         } catch (Exception e) {

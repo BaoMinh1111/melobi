@@ -11,6 +11,7 @@ import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.MetadataChanges;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.WriteBatch;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,6 +24,8 @@ import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.entity.Like;
 import vn.edu.ueh.melobi_nhom5.model.Question;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.UserNameLookup;
 
 public class QuestionService {
     private static final String COL_QUESTIONS = "questions";
@@ -41,6 +44,9 @@ public class QuestionService {
      * Task trả về DocumentReference của câu hỏi mới (ref.getId() = id câu hỏi).
      */
     public Task<DocumentReference> createQuestion(Question question) {
+        if (!NetworkUtils.isOnline()) {
+            return Tasks.forException(NetworkUtils.offlineException());
+        }
         String title = question.getTitle() != null ? question.getTitle().trim() : "";
         String content = question.getContent() != null ? question.getContent().trim() : "";
         long now = System.currentTimeMillis();
@@ -63,6 +69,9 @@ public class QuestionService {
     }
 
     public Task<Void> updateQuestion(String questionId, String title, String content, String imageUrl) {
+        if (!NetworkUtils.isOnline()) {
+            return Tasks.forException(NetworkUtils.offlineException());
+        }
         String cleanTitle = title != null ? title.trim() : "";
         Map<String, Object> data = new HashMap<>();
         data.put("title", cleanTitle);
@@ -76,6 +85,9 @@ public class QuestionService {
     /** Gọi sau khi kiểm tra question.getUserId() == người đang đăng nhập.
      *  TODO: xóa luôn Answer/Comment liên quan (composition) - phối hợp bạn làm Answer. */
     public Task<Void> deleteQuestion(String questionId) {
+        if (!NetworkUtils.isOnline()) {
+            return Tasks.forException(NetworkUtils.offlineException());
+        }
         return db.collection(COL_QUESTIONS).document(questionId).delete();
     }
 
@@ -160,10 +172,7 @@ public class QuestionService {
 
     private boolean matchesKeyword(Question question, String keyword) {
         return containsIgnoreCase(question.getTitle(), keyword)
-                || containsIgnoreCase(question.getTitleLower(), keyword)
-                || containsIgnoreCase(question.getContent(), keyword)
-                || containsIgnoreCase(question.getCategory(), keyword)
-                || containsIgnoreCase(question.getMajorId(), keyword);
+                || containsIgnoreCase(question.getTitleLower(), keyword);
     }
 
     private boolean containsIgnoreCase(String value, String keyword) {
@@ -305,5 +314,53 @@ public class QuestionService {
     public Task<Void> hideQuestion(String questionId) {          // ModerationService gọi
         return db.collection(COL_QUESTIONS).document(questionId)
                 .update("status", Question.STATUS_HIDDEN);
+    }
+
+    public void updateAuthorName(String userId, String fullName) {
+        if (userId == null || userId.trim().isEmpty()) {
+            return;
+        }
+        String name = fullName != null ? fullName.trim() : "";
+        UserNameLookup.put(userId, name);
+        Map<String, Object> authorData = new HashMap<>();
+        authorData.put("userName", name);
+        Map<String, Object> replyData = new HashMap<>();
+        replyData.put("replyToUserName", name);
+        db.collection(COL_QUESTIONS)
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> commitAuthorNameUpdates(snapshot, authorData));
+        db.collection("answers")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> commitAuthorNameUpdates(snapshot, authorData));
+        db.collection("comments")
+                .whereEqualTo("userId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> commitAuthorNameUpdates(snapshot, authorData));
+        db.collection("comments")
+                .whereEqualTo("replyToUserId", userId)
+                .get()
+                .addOnSuccessListener(snapshot -> commitAuthorNameUpdates(snapshot, replyData));
+    }
+
+    private void commitAuthorNameUpdates(QuerySnapshot snapshot, Map<String, Object> data) {
+        if (snapshot == null || snapshot.isEmpty()) {
+            return;
+        }
+        WriteBatch batch = db.batch();
+        int count = 0;
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            batch.update(doc.getReference(), data);
+            count++;
+            if (count >= 400) {
+                batch.commit();
+                batch = db.batch();
+                count = 0;
+            }
+        }
+        if (count > 0) {
+            batch.commit();
+        }
     }
 }

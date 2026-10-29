@@ -3,7 +3,6 @@ package vn.edu.ueh.melobi_nhom5;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -15,8 +14,6 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -45,6 +42,8 @@ import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.SyncManager;
 
 public class ProfileActivity extends AppCompatActivity {
 
@@ -101,28 +100,14 @@ public class ProfileActivity extends AppCompatActivity {
     private QuestionAdapter likedAdapter;
     private ListenerRegistration profileListener;
     private ListenerRegistration questionsListener;
-    private FirebaseStorageManager firebaseStorageManager;
     private QuestionAdapter questionAdapter;
     private ProfileAnswerAdapter answerAdapter;
     private final List<Major> majorList = new ArrayList<>();
     private User currentProfile;
-    private Uri selectedAvatarUri;
     private String targetUserId;
     private String fallbackName;
     private boolean viewingSelf = true;
     private boolean followingTarget;
-
-    private final ActivityResultLauncher<String> pickAvatarLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-                if (uri == null) {
-                    return;
-                }
-                selectedAvatarUri = uri;
-                ivProfileAvatar.setVisibility(View.VISIBLE);
-                ivProfileAvatar.setImageURI(uri);
-                tvProfileInitial.setVisibility(View.GONE);
-                tvAvatarStatus.setText("Đã chọn ảnh đại diện mới");
-            });
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -138,7 +123,6 @@ public class ProfileActivity extends AppCompatActivity {
         userService = new UserService();
         followService = new FollowService();
         questionService = new QuestionService();
-        firebaseStorageManager = new FirebaseStorageManager();
 
         String currentUserId = AuthHelper.getCurrentUserId();
         fallbackName = getIntent().getStringExtra(EXTRA_USER_NAME);
@@ -211,7 +195,9 @@ public class ProfileActivity extends AppCompatActivity {
 
     private void setupActions() {
         toolbarProfile.setNavigationOnClickListener(v -> finish());
-        btnChooseAvatar.setOnClickListener(v -> pickAvatarLauncher.launch("image/*"));
+        if (btnChooseAvatar != null) {
+            btnChooseAvatar.setVisibility(View.GONE);
+        }
         btnSaveProfile.setOnClickListener(v -> saveProfile());
         btnLogoutProfile.setOnClickListener(v -> {
             userService.logout();
@@ -226,7 +212,9 @@ public class ProfileActivity extends AppCompatActivity {
 
     private void applyViewMode() {
         int editVisibility = viewingSelf ? View.VISIBLE : View.GONE;
-        btnChooseAvatar.setVisibility(editVisibility);
+        if (btnChooseAvatar != null) {
+            btnChooseAvatar.setVisibility(View.GONE);
+        }
         btnSaveProfile.setVisibility(editVisibility);
         btnLogoutProfile.setVisibility(editVisibility);
         layoutPublicActions.setVisibility(viewingSelf ? View.GONE : View.VISIBLE);
@@ -293,13 +281,16 @@ public class ProfileActivity extends AppCompatActivity {
                 }
                 return;
             }
-            User result = snapshot.toObject(User.class);
-            if (result != null && (result.getUserId() == null || result.getUserId().trim().isEmpty())) {
-                result.setUserId(snapshot.getId());
+            if (snapshot.getMetadata().hasPendingWrites()) {
+                return;
             }
+            User result = UserService.fromSnapshot(snapshot);
             currentProfile = result != null
                     ? result
                     : new User(targetUserId, fallbackName != null ? fallbackName : "Thành viên", "");
+            if (viewingSelf) {
+                AuthHelper.setCurrentUser(currentProfile);
+            }
             bindProfile();
             refreshFollowCounts();
             if (!viewingSelf) {
@@ -343,6 +334,10 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void toggleFollow() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String currentUserId = AuthHelper.getCurrentUserId();
         if (currentUserId == null) {
             navigateToLogin();
@@ -375,6 +370,10 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void openChat() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String currentUserId = AuthHelper.getCurrentUserId();
         if (currentUserId != null && currentUserId.equals(targetUserId)) {
             Toast.makeText(this, R.string.error_chat_self, Toast.LENGTH_SHORT).show();
@@ -390,11 +389,30 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void loadHistory() {
+        if (!NetworkUtils.isOnline()) {
+            List<Question> viewed = SyncManager.getInstance(this).getViewedQuestionsLastDay();
+            List<Question> mine = new ArrayList<>();
+            for (Question question : viewed) {
+                if (targetUserId != null && targetUserId.equals(question.getUserId())) {
+                    mine.add(question);
+                }
+            }
+            tvEmptyQuestions.setVisibility(mine.isEmpty() ? View.VISIBLE : View.GONE);
+            questionAdapter.setQuestions(mine);
+            tvEmptyAnswers.setVisibility(View.VISIBLE);
+            if (tvEmptyLiked != null) {
+                tvEmptyLiked.setVisibility(viewingSelf ? View.VISIBLE : View.GONE);
+            }
+            if (likedAdapter != null) {
+                likedAdapter.setQuestions(new ArrayList<>());
+            }
+            return;
+        }
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         if (questionsListener == null) {
             questionsListener = db.collection("questions")
                     .whereEqualTo("userId", targetUserId)
-                    .addSnapshotListener((snapshot, error) -> {
+                    .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE, (snapshot, error) -> {
                         if (isFinishing() || isDestroyed()) {
                             return;
                         }
@@ -444,6 +462,8 @@ public class ProfileActivity extends AppCompatActivity {
         if (question == null || !Question.STATUS_ACTIVE.equals(question.getStatus())) {
             return null;
         }
+        question.setUserName(vn.edu.ueh.melobi_nhom5.util.UserNameLookup.resolve(
+                question.getUserId(), question.getUserName()));
         return question;
     }
 
@@ -556,14 +576,6 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void renderAvatar() {
-        if (selectedAvatarUri != null) {
-            ivProfileAvatar.setVisibility(View.VISIBLE);
-            ivProfileAvatar.setImageURI(selectedAvatarUri);
-            tvProfileInitial.setVisibility(View.GONE);
-            tvAvatarStatus.setText("Đã chọn ảnh đại diện mới");
-            return;
-        }
-
         String fullName = currentProfile != null ? currentProfile.getFullName() : fallbackName;
         String avatarUrl = currentProfile != null ? currentProfile.getAvatarUrl() : "";
         if (avatarUrl != null && !avatarUrl.trim().isEmpty()) {
@@ -616,6 +628,10 @@ public class ProfileActivity extends AppCompatActivity {
             Toast.makeText(this, "Không tìm thấy hồ sơ người dùng", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         String fullName = etProfileFullName.getText() != null ? etProfileFullName.getText().toString().trim() : "";
         String bio = etProfileBio.getText() != null ? etProfileBio.getText().toString().trim() : "";
@@ -634,28 +650,10 @@ public class ProfileActivity extends AppCompatActivity {
         currentProfile.setBio(bio);
 
         setLoading(true);
-        if (selectedAvatarUri != null) {
-            String oldAvatarUrl = currentProfile.getAvatarUrl();
-            firebaseStorageManager.uploadAvatar(currentProfile.getUserId(), selectedAvatarUri, new FirebaseStorageManager.Callback<String>() {
-                @Override
-                public void onSuccess(String uploadedUrl) {
-                    currentProfile.setAvatarUrl(uploadedUrl);
-                    persistProfile(selectedMajor.getMajorId(), oldAvatarUrl);
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    setLoading(false);
-                    Toast.makeText(ProfileActivity.this, e.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            });
-            return;
-        }
-
-        persistProfile(selectedMajor.getMajorId(), null);
+        persistProfile(selectedMajor.getMajorId());
     }
 
-    private void persistProfile(String selectedMajorId, String oldAvatarUrl) {
+    private void persistProfile(String selectedMajorId) {
         userService.updateProfile(currentProfile, new UserService.Callback<User>() {
             @Override
             public void onSuccess(User result) {
@@ -664,7 +662,7 @@ public class ProfileActivity extends AppCompatActivity {
                         @Override
                         public void onSuccess(Void ignored) {
                             result.setMajorId(selectedMajorId);
-                            onProfileSaved(result, oldAvatarUrl);
+                            onProfileSaved(result);
                         }
 
                         @Override
@@ -676,7 +674,7 @@ public class ProfileActivity extends AppCompatActivity {
                     return;
                 }
 
-                onProfileSaved(result, oldAvatarUrl);
+                onProfileSaved(result);
             }
 
             @Override
@@ -687,33 +685,27 @@ public class ProfileActivity extends AppCompatActivity {
         });
     }
 
-    private void onProfileSaved(User updatedUser, String oldAvatarUrl) {
+    private void onProfileSaved(User updatedUser) {
         currentProfile = updatedUser;
-        selectedAvatarUri = null;
+        AuthHelper.setCurrentUser(updatedUser);
+        vn.edu.ueh.melobi_nhom5.util.UserNameLookup.put(updatedUser.getUserId(), updatedUser.getFullName());
+        questionService.updateAuthorName(updatedUser.getUserId(), updatedUser.getFullName());
         setLoading(false);
         bindProfile();
-        Toast.makeText(this, R.string.message_profile_updated, Toast.LENGTH_SHORT).show();
-
-        if (oldAvatarUrl != null
-                && !oldAvatarUrl.trim().isEmpty()
-                && !oldAvatarUrl.equals(updatedUser.getAvatarUrl())) {
-            firebaseStorageManager.deleteImage(oldAvatarUrl, new FirebaseStorageManager.Callback<Void>() {
-                @Override
-                public void onSuccess(Void result) {
-                    // Không cần thao tác UI bổ sung.
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    // Không chặn luồng cập nhật hồ sơ nếu xóa ảnh cũ thất bại.
-                }
-            });
+        if (questionAdapter != null) {
+            questionAdapter.notifyDataSetChanged();
         }
+        if (likedAdapter != null) {
+            likedAdapter.notifyDataSetChanged();
+        }
+        Toast.makeText(this, R.string.message_profile_updated, Toast.LENGTH_SHORT).show();
     }
 
     private void setLoading(boolean isLoading) {
         pbProfile.setVisibility(isLoading ? View.VISIBLE : View.GONE);
-        btnChooseAvatar.setEnabled(!isLoading);
+        if (btnChooseAvatar != null) {
+            btnChooseAvatar.setEnabled(false);
+        }
         btnSaveProfile.setEnabled(!isLoading);
         btnLogoutProfile.setEnabled(!isLoading);
         btnFollowProfile.setEnabled(!isLoading);

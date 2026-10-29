@@ -27,6 +27,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.ChatService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 public class ChatActivity extends AppCompatActivity {
 
@@ -54,10 +55,17 @@ public class ChatActivity extends AppCompatActivity {
     private TextView tvChatEmpty;
     private EditText etMessageInput;
     private ImageButton btnSendMessage;
+    private ImageButton btnAttachImage;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
 
         if (!AuthHelper.isLoggedIn()) {
             navigateToLogin();
@@ -93,6 +101,7 @@ public class ChatActivity extends AppCompatActivity {
         tvChatEmpty = findViewById(R.id.tvChatEmpty);
         etMessageInput = findViewById(R.id.etMessageInput);
         btnSendMessage = findViewById(R.id.btnSendMessage);
+        btnAttachImage = findViewById(R.id.btnAttachImage);
 
         toolbarChat.setNavigationOnClickListener(v -> finish());
         if (otherUserName != null && !otherUserName.trim().isEmpty()) {
@@ -106,6 +115,9 @@ public class ChatActivity extends AppCompatActivity {
         rvMessages.setAdapter(messageAdapter);
 
         btnSendMessage.setOnClickListener(v -> sendMessage());
+        if (btnAttachImage != null) {
+            btnAttachImage.setVisibility(View.GONE);
+        }
         if (savedInstanceState != null) {
             String draft = savedInstanceState.getString(STATE_DRAFT);
             if (draft != null) {
@@ -260,8 +272,19 @@ public class ChatActivity extends AppCompatActivity {
         }
     }
 
+    private void resetSending() {
+        sending = false;
+        if (!isFinishing() && !isDestroyed()) {
+            btnSendMessage.setEnabled(true);
+        }
+    }
+
     private void sendMessage() {
         if (sending) {
+            return;
+        }
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
             return;
         }
         if (conversationId == null || conversationId.trim().isEmpty()) {
@@ -286,12 +309,7 @@ public class ChatActivity extends AppCompatActivity {
                     etMessageInput.setText(content);
                     Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
                 })
-                .addOnCompleteListener(task -> {
-                    sending = false;
-                    if (!isFinishing() && !isDestroyed()) {
-                        btnSendMessage.setEnabled(true);
-                    }
-                });
+                .addOnCompleteListener(task -> resetSending());
     }
 
     private void navigateToLogin() {

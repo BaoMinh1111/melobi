@@ -11,14 +11,15 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.R;
 import vn.edu.ueh.melobi_nhom5.model.User;
-import vn.edu.ueh.melobi_nhom5.service.FollowService;
 
 public class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.ViewHolder> {
 
@@ -38,6 +39,7 @@ public class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.Vi
     private boolean hideFollowButton;
     private boolean compact;
     private String currentMajorId;
+    private final Map<String, String> majorNames = new HashMap<>();
     private static final int COMPACT_LIMIT = 12;
 
     public FollowUserAdapter(String currentUserId,
@@ -60,6 +62,14 @@ public class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.Vi
 
     public void setCurrentMajorId(String majorId) {
         this.currentMajorId = majorId;
+        notifyDataSetChanged();
+    }
+
+    public void setMajorNames(Map<String, String> names) {
+        majorNames.clear();
+        if (names != null) {
+            majorNames.putAll(names);
+        }
         notifyDataSetChanged();
     }
 
@@ -95,17 +105,10 @@ public class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.Vi
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         User user = users.get(position);
         String userId = user.getUserId();
-        String name = user.getDisplayName();
-        if (name == null || name.trim().isEmpty()) {
-            name = userId != null ? userId : "Người dùng";
-        }
+        String name = vn.edu.ueh.melobi_nhom5.util.UserNameLookup.resolve(userId, user.getFullName());
 
         holder.tvName.setText(name);
-        if (FollowService.isSameMajor(currentMajorId, user.getMajorId())) {
-            holder.tvUserId.setText(R.string.label_same_major);
-        } else {
-            holder.tvUserId.setText(R.string.label_other_major);
-        }
+        holder.tvUserId.setText(resolveMajorLabel(user, holder.itemView.getContext().getString(R.string.label_other_major)));
         holder.tvAvatar.setText(name.substring(0, 1).toUpperCase(Locale.getDefault()));
 
         boolean isSelf = currentUserId != null && currentUserId.equals(userId);
@@ -134,6 +137,23 @@ public class FollowUserAdapter extends RecyclerView.Adapter<FollowUserAdapter.Vi
     @Override
     public int getItemCount() {
         return users.size();
+    }
+
+    private String resolveMajorLabel(User user, String fallback) {
+        String majorId = user != null ? user.getMajorId() : null;
+        if (majorId != null && !majorId.trim().isEmpty()) {
+            String mapped = majorNames.get(majorId);
+            if (mapped != null && !mapped.trim().isEmpty()) {
+                return mapped;
+            }
+            for (String name : majorNames.values()) {
+                if (majorId.equalsIgnoreCase(name)) {
+                    return name;
+                }
+            }
+            return majorId;
+        }
+        return fallback;
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

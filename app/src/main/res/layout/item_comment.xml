@@ -103,5 +103,17 @@
             android:textColor="#3C4043"
             android:textSize="13sp"
             tools:text="Cảm ơn bạn nhé, bình luận rất hữu ích!" />
+
+        <TextView
+            android:id="@+id/btnReplyComment"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:paddingVertical="4dp"
+            android:text="@string/action_reply"
+            android:textColor="@color/melobi_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

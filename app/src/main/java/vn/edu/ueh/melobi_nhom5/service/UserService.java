@@ -18,17 +18,26 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.MetadataChanges;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.SetOptions;
+import com.google.firebase.firestore.Source;
+
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
+import vn.edu.ueh.melobi_nhom5.util.UserNameLookup;
 
 public class UserService {
     private static final String COLLECTION_MAJORS = "majors";
@@ -194,7 +203,46 @@ public class UserService {
     }
 
     public ListenerRegistration listenProfile(String userId, EventListener<DocumentSnapshot> listener) {
-        return db.collection(COLLECTION_USERS).document(userId).addSnapshotListener(listener);
+        return db.collection(COLLECTION_USERS).document(userId)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public ListenerRegistration listenUsers(EventListener<QuerySnapshot> listener) {
+        return db.collection(COLLECTION_USERS)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public static User fromSnapshot(DocumentSnapshot snapshot) {
+        if (snapshot == null || !snapshot.exists()) {
+            return null;
+        }
+        User user = snapshot.toObject(User.class);
+        if (user == null) {
+            user = new User();
+        }
+        user.setUserId(snapshot.getId());
+        String name = firstNonEmpty(
+                snapshot.getString("fullName"),
+                snapshot.getString("displayName"),
+                snapshot.getString("name")
+        );
+        if (!TextUtils.isEmpty(name)) {
+            user.setFullName(name);
+            UserNameLookup.put(user.getUserId(), name);
+        }
+        return user;
+    }
+
+    private static String firstNonEmpty(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (!TextUtils.isEmpty(value) && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     public void getProfile(String userId, Callback<User> callback) {
@@ -203,9 +251,10 @@ public class UserService {
             return;
         }
 
+        Source source = NetworkUtils.isOnline() ? Source.SERVER : Source.DEFAULT;
         db.collection(COLLECTION_USERS)
                 .document(userId)
-                .get()
+                .get(source)
                 .addOnSuccessListener(documentSnapshot -> {
                     if (!documentSnapshot.exists()) {
                         if (callback != null) {
@@ -214,16 +263,35 @@ public class UserService {
                         return;
                     }
 
-                    User user = documentSnapshot.toObject(User.class);
-                    if (user != null && TextUtils.isEmpty(user.getUserId())) {
-                        user.setUserId(documentSnapshot.getId());
-                    }
+                    User user = fromSnapshot(documentSnapshot);
                     cacheIfCurrentUser(user);
                     if (callback != null) {
                         callback.onSuccess(user);
                     }
                 })
-                .addOnFailureListener(e -> notifyError(callback, e));
+                .addOnFailureListener(e -> {
+                    if (source != Source.SERVER) {
+                        notifyError(callback, e);
+                        return;
+                    }
+                    db.collection(COLLECTION_USERS)
+                            .document(userId)
+                            .get(Source.DEFAULT)
+                            .addOnSuccessListener(fallbackSnapshot -> {
+                                if (!fallbackSnapshot.exists()) {
+                                    if (callback != null) {
+                                        callback.onSuccess(null);
+                                    }
+                                    return;
+                                }
+                                User user = fromSnapshot(fallbackSnapshot);
+                                cacheIfCurrentUser(user);
+                                if (callback != null) {
+                                    callback.onSuccess(user);
+                                }
+                            })
+                            .addOnFailureListener(fallbackError -> notifyError(callback, fallbackError));
+                });
     }
 
     public void updateProfile(User user, Callback<User> callback) {
@@ -231,20 +299,33 @@ public class UserService {
             notifyError(callback, new IllegalArgumentException("Thông tin người dùng không hợp lệ"));
             return;
         }
-
-        FirebaseUser currentFirebaseUser = auth.getCurrentUser();
-        if (currentFirebaseUser != null && user.getUserId().equals(currentFirebaseUser.getUid())) {
-            UserProfileChangeRequest.Builder builder = new UserProfileChangeRequest.Builder()
-                    .setDisplayName(user.getFullName());
-            if (!TextUtils.isEmpty(user.getAvatarUrl())) {
-                builder.setPhotoUri(Uri.parse(user.getAvatarUrl()));
-            }
-            currentFirebaseUser.updateProfile(builder.build())
-                    .addOnCompleteListener(task -> saveUserDocument(user, callback));
+        if (!NetworkUtils.isOnline()) {
+            notifyError(callback, NetworkUtils.offlineException());
             return;
         }
 
-        saveUserDocument(user, callback);
+        saveUserDocument(user, new Callback<User>() {
+            @Override
+            public void onSuccess(User result) {
+                FirebaseUser currentFirebaseUser = auth.getCurrentUser();
+                if (currentFirebaseUser != null && user.getUserId().equals(currentFirebaseUser.getUid())) {
+                    UserProfileChangeRequest.Builder builder = new UserProfileChangeRequest.Builder()
+                            .setDisplayName(user.getFullName());
+                    if (!TextUtils.isEmpty(user.getAvatarUrl())) {
+                        builder.setPhotoUri(Uri.parse(user.getAvatarUrl()));
+                    }
+                    currentFirebaseUser.updateProfile(builder.build());
+                }
+                if (callback != null) {
+                    callback.onSuccess(result);
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                notifyError(callback, e);
+            }
+        });
     }
 
     public void updateMajor(String userId, String majorId, Callback<Void> callback) {
@@ -361,7 +442,10 @@ public class UserService {
                     result.setStatus(User.STATUS_ACTIVE);
                 }
 
-                saveUserDocument(result, callback);
+                cacheIfCurrentUser(result);
+                if (callback != null) {
+                    callback.onSuccess(result);
+                }
             }
 
             @Override
@@ -399,9 +483,24 @@ public class UserService {
     }
 
     private void saveUserDocument(User user, Callback<User> callback) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("userId", user.getUserId());
+        data.put("fullName", user.getFullName() != null ? user.getFullName() : "");
+        data.put("email", user.getEmail() != null ? user.getEmail() : "");
+        data.put("avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "");
+        data.put("bio", user.getBio() != null ? user.getBio() : "");
+        data.put("majorId", user.getMajorId() != null ? user.getMajorId() : "");
+        data.put("role", user.getRole() != null ? user.getRole() : User.ROLE_USER);
+        data.put("status", user.getStatus() != null ? user.getStatus() : User.STATUS_ACTIVE);
+        data.put("followerCount", user.getFollowerCount());
+        data.put("followingCount", user.getFollowingCount());
+        data.put("displayName", FieldValue.delete());
+        if (user.getCreatedAt() > 0) {
+            data.put("createdAt", user.getCreatedAt());
+        }
         db.collection(COLLECTION_USERS)
                 .document(user.getUserId())
-                .set(user, SetOptions.merge())
+                .set(data, SetOptions.merge())
                 .addOnSuccessListener(unused -> {
                     cacheIfCurrentUser(user);
                     if (callback != null) {
@@ -412,6 +511,9 @@ public class UserService {
     }
 
     private void cacheIfCurrentUser(User user) {
+        if (user != null) {
+            UserNameLookup.put(user.getUserId(), user.getFullName());
+        }
         FirebaseUser firebaseUser = auth.getCurrentUser();
         if (user != null && firebaseUser != null && firebaseUser.getUid().equals(user.getUserId())) {
             AuthHelper.setCurrentUser(user);

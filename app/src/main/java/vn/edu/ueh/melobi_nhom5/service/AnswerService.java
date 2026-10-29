@@ -6,6 +6,7 @@ import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.model.Answer;
 import vn.edu.ueh.melobi_nhom5.repository.AnswerRepository;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 public class AnswerService {
     private final AnswerRepository answerRepository;
@@ -30,6 +31,12 @@ public class AnswerService {
     }
 
     public void createAnswer(Answer answer, Callback<Answer> callback) {
+        if (!NetworkUtils.isOnline()) {
+            if (callback != null) {
+                callback.onError(NetworkUtils.offlineException());
+            }
+            return;
+        }
         if (answer == null) {
             if (callback != null) callback.onError(new IllegalArgumentException("Câu trả lời không hợp lệ"));
             return;

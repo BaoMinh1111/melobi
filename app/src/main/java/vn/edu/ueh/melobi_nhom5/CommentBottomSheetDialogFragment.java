@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -18,6 +19,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.List;
 
@@ -26,6 +28,7 @@ import vn.edu.ueh.melobi_nhom5.model.Comment;
 import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.repository.CommentRepository;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment {
 
@@ -40,12 +43,17 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
     private CommentAdapter commentAdapter;
     private User currentUser;
     private OnCommentUpdatedListener listener;
+    private Comment replyTarget;
+    private ListenerRegistration commentsListener;
 
     private RecyclerView rvComments;
     private ProgressBar pbCommentsLoading;
     private TextView tvEmptyComments;
     private EditText etCommentInput;
     private ImageButton btnSendComment;
+    private LinearLayout layoutReplyBar;
+    private TextView tvReplyBar;
+    private TextView btnCancelReply;
 
     public static CommentBottomSheetDialogFragment newInstance(String answerId) {
         CommentBottomSheetDialogFragment fragment = new CommentBottomSheetDialogFragment();
@@ -90,12 +98,25 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
         tvEmptyComments = view.findViewById(R.id.tvEmptyComments);
         etCommentInput = view.findViewById(R.id.etCommentInput);
         btnSendComment = view.findViewById(R.id.btnSendComment);
+        layoutReplyBar = view.findViewById(R.id.layoutReplyBar);
+        tvReplyBar = view.findViewById(R.id.tvReplyBar);
+        btnCancelReply = view.findViewById(R.id.btnCancelReply);
 
         setupRecyclerView();
-
         btnSendComment.setOnClickListener(v -> submitComment());
+        if (btnCancelReply != null) {
+            btnCancelReply.setOnClickListener(v -> clearReplyTarget());
+        }
+        listenComments();
+    }
 
-        loadComments();
+    @Override
+    public void onDestroyView() {
+        if (commentsListener != null) {
+            commentsListener.remove();
+            commentsListener = null;
+        }
+        super.onDestroyView();
     }
 
     private void setupRecyclerView() {
@@ -122,39 +143,64 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
             public void onAuthorClick(Comment comment) {
                 ProfileActivity.openProfile(requireContext(), comment.getUserId(), comment.getUserName());
             }
+
+            @Override
+            public void onReplyClick(Comment comment) {
+                setReplyTarget(comment);
+            }
         });
 
         rvComments.setLayoutManager(new LinearLayoutManager(requireContext()));
         rvComments.setAdapter(commentAdapter);
     }
 
-    private void loadComments() {
+    private void listenComments() {
         pbCommentsLoading.setVisibility(View.VISIBLE);
         tvEmptyComments.setVisibility(View.GONE);
-
-        commentRepository.getCommentsByAnswerId(answerId, new CommentRepository.Callback<List<Comment>>() {
-            @Override
-            public void onSuccess(List<Comment> result) {
-                if (!isAdded()) return;
-                pbCommentsLoading.setVisibility(View.GONE);
-                if (result.isEmpty()) {
-                    tvEmptyComments.setVisibility(View.VISIBLE);
-                } else {
-                    tvEmptyComments.setVisibility(View.GONE);
-                }
-                commentAdapter.setComments(result);
+        if (commentsListener != null) {
+            commentsListener.remove();
+        }
+        commentsListener = commentRepository.listenComments(answerId, (snapshot, error) -> {
+            if (!isAdded()) {
+                return;
             }
-
-            @Override
-            public void onError(Exception e) {
-                if (!isAdded()) return;
-                pbCommentsLoading.setVisibility(View.GONE);
-                Toast.makeText(getContext(), "Lỗi tải bình luận: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            pbCommentsLoading.setVisibility(View.GONE);
+            if (error != null) {
+                Toast.makeText(getContext(), "Lỗi tải bình luận: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
             }
+            List<Comment> result = commentRepository.mapComments(snapshot);
+            tvEmptyComments.setVisibility(result.isEmpty() ? View.VISIBLE : View.GONE);
+            commentAdapter.setComments(result);
         });
     }
 
+    private void setReplyTarget(Comment comment) {
+        replyTarget = comment;
+        String name = comment.getUserName() != null ? comment.getUserName() : "người dùng";
+        if (layoutReplyBar != null) {
+            layoutReplyBar.setVisibility(View.VISIBLE);
+        }
+        if (tvReplyBar != null) {
+            tvReplyBar.setText(getString(R.string.label_replying_to, name));
+        }
+        etCommentInput.setHint(getString(R.string.hint_reply_comment, name));
+        etCommentInput.requestFocus();
+    }
+
+    private void clearReplyTarget() {
+        replyTarget = null;
+        if (layoutReplyBar != null) {
+            layoutReplyBar.setVisibility(View.GONE);
+        }
+        etCommentInput.setHint(R.string.hint_write_comment);
+    }
+
     private void submitComment() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(getContext(), R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String content = etCommentInput.getText().toString().trim();
         if (content.isEmpty()) {
             Toast.makeText(getContext(), "Vui lòng nhập nội dung bình luận", Toast.LENGTH_SHORT).show();
@@ -167,6 +213,12 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
         newComment.setUserName(currentUser.getDisplayName());
         newComment.setUserAvatarUrl(currentUser.getAvatarUrl());
         newComment.setContent(content);
+        if (replyTarget != null) {
+            String parentId = replyTarget.isReply() ? replyTarget.getParentId() : replyTarget.getId();
+            newComment.setParentId(parentId);
+            newComment.setReplyToUserId(replyTarget.getUserId());
+            newComment.setReplyToUserName(replyTarget.getUserName());
+        }
 
         btnSendComment.setEnabled(false);
 
@@ -176,13 +228,8 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
                 if (!isAdded()) return;
                 btnSendComment.setEnabled(true);
                 etCommentInput.setText("");
+                clearReplyTarget();
                 Toast.makeText(getContext(), "Đã thêm bình luận", Toast.LENGTH_SHORT).show();
-
-                // Instant update on UI
-                commentAdapter.addComment(result);
-                rvComments.smoothScrollToPosition(commentAdapter.getItemCount() - 1);
-                tvEmptyComments.setVisibility(View.GONE);
-
                 if (listener != null) {
                     listener.onCommentUpdated();
                 }
@@ -222,7 +269,6 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
                         public void onSuccess(Void result) {
                             if (!isAdded()) return;
                             Toast.makeText(getContext(), "Đã cập nhật bình luận", Toast.LENGTH_SHORT).show();
-                            loadComments();
                         }
 
                         @Override
@@ -246,7 +292,6 @@ public class CommentBottomSheetDialogFragment extends BottomSheetDialogFragment 
                         public void onSuccess(Void result) {
                             if (!isAdded()) return;
                             Toast.makeText(getContext(), "Đã xóa bình luận", Toast.LENGTH_SHORT).show();
-                            loadComments();
                             if (listener != null) {
                                 listener.onCommentUpdated();
                             }

@@ -42,7 +42,7 @@ public class NotificationService {
     public ListenerRegistration listenNotifications(String userId, EventListener<QuerySnapshot> listener) {
         return db.collection(COL_NOTIFICATIONS)
                 .whereEqualTo("receiverId", userId)
-                .addSnapshotListener(listener);
+                .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE, listener);
     }
 
     public Task<Void> markAsRead(String notificationId) {

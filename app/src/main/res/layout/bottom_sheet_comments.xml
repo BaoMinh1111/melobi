@@ -113,6 +113,37 @@
         android:layout_height="1dp"
         android:background="@color/divider_color" />
 
+    <LinearLayout
+        android:id="@+id/layoutReplyBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/melobi_background"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvReplyBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/melobi_primary"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            tools:text="Đang trả lời Hương Giang" />
+
+        <TextView
+            android:id="@+id/btnCancelReply"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="6dp"
+            android:text="@android:string/cancel"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <!-- Bottom Input Bar -->
     <LinearLayout
         android:layout_width="match_parent"

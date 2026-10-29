@@ -30,9 +30,9 @@ public class ContentLocalDao {
         SQLiteDatabase db = helper.getWritableDatabase();
         db.beginTransaction();
         try {
-            long now = System.currentTimeMillis();
             for (Question question : questions) {
-                upsertQuestion(db, question, now);
+                long viewedAt = existingLastViewedAt(db, question.getQuestionId());
+                upsertQuestion(db, question, viewedAt);
             }
             db.setTransactionSuccessful();
         } finally {
@@ -104,6 +104,29 @@ public class ContentLocalDao {
             cursor.close();
         }
         return answers;
+    }
+
+    private long existingLastViewedAt(SQLiteDatabase db, String questionId) {
+        if (questionId == null || questionId.trim().isEmpty()) {
+            return 0L;
+        }
+        Cursor cursor = db.query(
+                DatabaseHelper.TABLE_QUESTION,
+                new String[]{DatabaseHelper.COL_Q_LAST_VIEWED_AT},
+                DatabaseHelper.COL_Q_ID + " = ?",
+                new String[]{questionId},
+                null,
+                null,
+                null
+        );
+        try {
+            if (cursor.moveToFirst()) {
+                return cursor.getLong(0);
+            }
+        } finally {
+            cursor.close();
+        }
+        return 0L;
     }
 
     private void upsertQuestion(SQLiteDatabase db, Question question, long viewedAt) {

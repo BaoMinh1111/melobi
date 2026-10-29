@@ -17,7 +17,7 @@ import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.R;
 import vn.edu.ueh.melobi_nhom5.model.Question;
-import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
+import vn.edu.ueh.melobi_nhom5.util.UserNameLookup;
 
 public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.QuestionViewHolder> {
 
@@ -138,7 +138,7 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
                     DateUtils.MINUTE_IN_MILLIS,
                     DateUtils.FORMAT_ABBREV_RELATIVE
             );
-            String authorName = question.getUserName() != null ? question.getUserName() : "Thành viên";
+            String authorName = UserNameLookup.resolve(question.getUserId(), question.getUserName());
             tvMainAuthorName.setText(authorName);
             tvMainAvatar.setText(authorName.substring(0, 1).toUpperCase());
             tvMainTime.setText(relativeTime);
@@ -182,30 +182,9 @@ public class QuestionAdapter extends RecyclerView.Adapter<QuestionAdapter.Questi
             if (ivQuestionImage == null) {
                 return;
             }
-            if (imageUrl == null || imageUrl.trim().isEmpty()) {
-                ivQuestionImage.setTag(null);
-                ivQuestionImage.setImageDrawable(null);
-                ivQuestionImage.setVisibility(View.GONE);
-                return;
-            }
-            ivQuestionImage.setVisibility(View.VISIBLE);
-            ivQuestionImage.setTag(imageUrl);
+            ivQuestionImage.setTag(null);
             ivQuestionImage.setImageDrawable(null);
-            FirebaseStorageManager.loadBitmap(imageUrl, 720, new FirebaseStorageManager.Callback<android.graphics.Bitmap>() {
-                @Override
-                public void onSuccess(android.graphics.Bitmap result) {
-                    if (imageUrl.equals(ivQuestionImage.getTag())) {
-                        ivQuestionImage.setImageBitmap(result);
-                    }
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    if (imageUrl.equals(ivQuestionImage.getTag())) {
-                        ivQuestionImage.setVisibility(View.GONE);
-                    }
-                }
-            });
+            ivQuestionImage.setVisibility(View.GONE);
         }
     }
 }

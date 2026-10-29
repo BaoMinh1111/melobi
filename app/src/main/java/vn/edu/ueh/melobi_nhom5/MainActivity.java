@@ -34,9 +34,11 @@ import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import vn.edu.ueh.melobi_nhom5.adapter.FollowUserAdapter;
@@ -88,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
     private final List<Question> allQuestions = new ArrayList<>();
     private String currentCategory = "Tất cả";
     private String currentMajorId;
+    private final Map<String, String> majorNames = new HashMap<>();
     private String currentKeyword = "";
     private boolean searchMode;
     private EditText etSearchQuestion;
@@ -114,6 +117,10 @@ public class MainActivity extends AppCompatActivity {
     private String currentTab = TAB_HOME;
     private ListenerRegistration questionsListener;
     private ListenerRegistration notificationsListener;
+    private ListenerRegistration usersListener;
+    private final Map<String, String> liveUserNames = new HashMap<>();
+    private final NetworkUtils.ConnectivityListener connectivityListener = online ->
+            runOnUiThread(() -> applyConnectivity(online));
     private final Set<String> likedQuestionIds = new HashSet<>();
     private boolean sampleInitAttempted;
 
@@ -163,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
         setupBottomNav();
         SampleDataInitializer.initializeSampleMajors(null);
         loadCurrentProfile();
+        NetworkUtils.addListener(connectivityListener);
 
         loadQuestions();
         loadSuggestions();
@@ -237,8 +245,12 @@ public class MainActivity extends AppCompatActivity {
         tvNavAvatar = findViewById(R.id.tvNavAvatar);
         fabAskQuestion = findViewById(R.id.fabAskQuestion);
         if (fabAskQuestion != null) {
-            fabAskQuestion.setOnClickListener(v ->
-                    startActivity(new Intent(MainActivity.this, CreateQuestionActivity.class)));
+            fabAskQuestion.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                startActivity(new Intent(MainActivity.this, CreateQuestionActivity.class));
+            });
         }
         bindNavAvatar();
         if (etSearchQuestion != null && currentKeyword != null && !currentKeyword.isEmpty()) {
@@ -341,17 +353,27 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(MainActivity.this, QuestionDetailActivity.class);
             intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
             startActivity(intent);
-        }, question -> ProfileActivity.openProfile(
-                MainActivity.this,
-                question.getUserId(),
-                question.getUserName()
-        ));
+        }, question -> {
+            if (!requireOnline()) {
+                return;
+            }
+            ProfileActivity.openProfile(
+                    MainActivity.this,
+                    question.getUserId(),
+                    question.getUserName()
+            );
+        });
         questionAdapter.setOnLikeClickListener(this::toggleQuestionLike);
 
         suggestionAdapter = new FollowUserAdapter(
                 currentUser.getId(),
                 this::toggleSuggestionFollow,
-                user -> ProfileActivity.openProfile(this, user.getUserId(), user.getDisplayName())
+                user -> {
+                    if (!requireOnline()) {
+                        return;
+                    }
+                    ProfileActivity.openProfile(this, user.getUserId(), user.getDisplayName());
+                }
         );
         suggestionAdapter.setCompact(true);
         suggestionAdapter.setCurrentMajorId(currentUser.getMajorId());
@@ -364,7 +386,12 @@ public class MainActivity extends AppCompatActivity {
         searchUserAdapter = new FollowUserAdapter(
                 currentUser.getId(),
                 this::toggleSuggestionFollow,
-                user -> ProfileActivity.openProfile(this, user.getUserId(), user.getDisplayName())
+                user -> {
+                    if (!requireOnline()) {
+                        return;
+                    }
+                    ProfileActivity.openProfile(this, user.getUserId(), user.getDisplayName());
+                }
         );
         if (rvSearchUsers != null) {
             rvSearchUsers.setLayoutManager(new LinearLayoutManager(this));
@@ -467,6 +494,18 @@ public class MainActivity extends AppCompatActivity {
             return leftName.compareToIgnoreCase(rightName);
         });
 
+        majorNames.clear();
+        for (Major major : items) {
+            if (major != null && major.getMajorId() != null && major.getMajorName() != null) {
+                majorNames.put(major.getMajorId(), major.getMajorName());
+            }
+        }
+        if (suggestionAdapter != null) {
+            suggestionAdapter.setMajorNames(majorNames);
+        }
+        if (searchUserAdapter != null) {
+            searchUserAdapter.setMajorNames(majorNames);
+        }
         chipGroup.setOnCheckedChangeListener(null);
         for (int i = chipGroup.getChildCount() - 1; i >= 0; i--) {
             View child = chipGroup.getChildAt(i);
@@ -522,6 +561,11 @@ public class MainActivity extends AppCompatActivity {
             filterQuestions(currentCategory, "");
             return;
         }
+        if (!NetworkUtils.isOnline()) {
+            hideUserSearchResults();
+            filterQuestions(currentCategory, currentKeyword);
+            return;
+        }
         questionService.searchQuestions(currentKeyword)
                 .addOnSuccessListener(results -> {
                     List<Question> filtered = new ArrayList<>();
@@ -539,6 +583,10 @@ public class MainActivity extends AppCompatActivity {
         if (searchUserAdapter == null) {
             return;
         }
+        if (!NetworkUtils.isOnline()) {
+            hideUserSearchResults();
+            return;
+        }
         if (keyword == null || keyword.trim().isEmpty()) {
             hideUserSearchResults();
             return;
@@ -550,12 +598,9 @@ public class MainActivity extends AppCompatActivity {
                 .addOnSuccessListener(snapshot -> {
                     List<User> matched = new ArrayList<>();
                     for (DocumentSnapshot doc : snapshot.getDocuments()) {
-                        User user = doc.toObject(User.class);
+                        User user = UserService.fromSnapshot(doc);
                         if (user == null) {
                             continue;
-                        }
-                        if (user.getUserId() == null || user.getUserId().trim().isEmpty()) {
-                            user.setUserId(doc.getId());
                         }
                         if (selfId != null && selfId.equals(user.getUserId())) {
                             continue;
@@ -564,10 +609,7 @@ public class MainActivity extends AppCompatActivity {
                             continue;
                         }
                         if (containsIgnoreCase(user.getFullName(), kw)
-                                || containsIgnoreCase(user.getDisplayName(), kw)
-                                || containsIgnoreCase(user.getEmail(), kw)
-                                || containsIgnoreCase(user.getUserId(), kw)
-                                || containsIgnoreCase(user.getMajorId(), kw)) {
+                                || containsIgnoreCase(user.getDisplayName(), kw)) {
                             matched.add(user);
                         }
                     }
@@ -583,6 +625,7 @@ public class MainActivity extends AppCompatActivity {
         if (searchUserAdapter == null || rvSearchUsers == null || tvSearchUserTitle == null) {
             return;
         }
+        searchUserAdapter.setMajorNames(majorNames);
         searchUserAdapter.setUsers(users);
         boolean empty = users == null || users.isEmpty();
         tvSearchUserTitle.setVisibility(View.VISIBLE);
@@ -619,10 +662,7 @@ public class MainActivity extends AppCompatActivity {
         List<Question> filtered = new ArrayList<>();
         for (Question q : allQuestions) {
             boolean matchKeyword = kw.isEmpty()
-                    || containsIgnoreCase(q.getTitle(), kw)
-                    || containsIgnoreCase(q.getContent(), kw)
-                    || containsIgnoreCase(q.getCategory(), kw)
-                    || containsIgnoreCase(q.getMajorId(), kw);
+                    || containsIgnoreCase(q.getTitle(), kw);
             if (matchesCategory(q, category) && matchKeyword) {
                 filtered.add(q);
             }
@@ -672,8 +712,18 @@ public class MainActivity extends AppCompatActivity {
         if (suggestionAdapter == null || currentUser == null) {
             return;
         }
+        if (!NetworkUtils.isOnline()) {
+            if (tvSuggestionTitle != null) {
+                tvSuggestionTitle.setVisibility(View.GONE);
+            }
+            if (rvSuggestedUsers != null) {
+                rvSuggestedUsers.setVisibility(View.GONE);
+            }
+            return;
+        }
         String majorId = currentUser.getMajorId();
         suggestionAdapter.setCurrentMajorId(majorId);
+        suggestionAdapter.setMajorNames(majorNames);
         followService.suggestUsers(majorId, new FollowService.Callback<List<User>>() {
             @Override
             public void onSuccess(List<User> result) {
@@ -700,6 +750,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleSuggestionFollow(User user) {
+        if (!requireOnline()) {
+            return;
+        }
         String currentUserId = AuthHelper.getCurrentUserId();
         if (currentUserId == null || user == null) {
             return;
@@ -746,14 +799,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadQuestions() {
-        if (!NetworkUtils.isOnline()) {
-            showCachedQuestions();
-            return;
-        }
-
         pbMainLoading.setVisibility(View.VISIBLE);
         tvMainEmpty.setVisibility(View.GONE);
+        if (!NetworkUtils.isOnline()) {
+            detachQuestionsListener();
+            showCachedQuestions(false);
+            return;
+        }
         refreshLikedQuestionIds();
+        listenUsersOverlay();
         if (questionsListener != null) {
             return;
         }
@@ -763,9 +817,13 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             pbMainLoading.setVisibility(View.GONE);
+            if (!NetworkUtils.isOnline()) {
+                showCachedQuestions(false);
+                return;
+            }
             if (error != null) {
                 Log.e(TAG, "Lỗi lắng nghe câu hỏi: ", error);
-                showCachedQuestions();
+                showCachedQuestions(true);
                 return;
             }
             List<Question> list = new ArrayList<>();
@@ -783,7 +841,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             bindQuestionList(list);
-            syncManager.cacheQuestions(list);
         });
     }
 
@@ -804,6 +861,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void toggleQuestionLike(Question question) {
+        if (!requireOnline()) {
+            return;
+        }
         if (question == null || currentUser == null) {
             return;
         }
@@ -816,15 +876,21 @@ public class MainActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
-    private void showCachedQuestions() {
+    private void showCachedQuestions(boolean notifyUser) {
         List<Question> cached = syncManager.getViewedQuestionsLastDay();
         pbMainLoading.setVisibility(View.GONE);
+        applyOfflineChrome();
         if (cached == null || cached.isEmpty()) {
+            bindQuestionList(new ArrayList<>());
             tvMainEmpty.setVisibility(View.VISIBLE);
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            if (notifyUser) {
+                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            }
             return;
         }
-        Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+        if (notifyUser) {
+            Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+        }
         bindQuestionList(cached);
     }
 
@@ -832,6 +898,7 @@ public class MainActivity extends AppCompatActivity {
         allQuestions.clear();
         allQuestions.addAll(list);
         Collections.sort(allQuestions, (q1, q2) -> Long.compare(q2.getCreatedAt(), q1.getCreatedAt()));
+        overlayAuthorNames();
         applyFilters();
     }
 
@@ -861,8 +928,15 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         refreshLikedQuestionIds();
+        if (questionAdapter != null) {
+            questionAdapter.notifyDataSetChanged();
+        }
         if (currentUser != null) {
             loadCurrentProfile();
+        }
+        applyOfflineChrome();
+        if (!NetworkUtils.isOnline()) {
+            showCachedQuestions(false);
         }
         if (TAB_NOTIFICATIONS.equals(currentTab)) {
             loadNotifications();
@@ -871,15 +945,114 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        if (questionsListener != null) {
-            questionsListener.remove();
-            questionsListener = null;
+        detachQuestionsListener();
+        if (usersListener != null) {
+            usersListener.remove();
+            usersListener = null;
         }
         if (notificationsListener != null) {
             notificationsListener.remove();
             notificationsListener = null;
         }
+        NetworkUtils.removeListener(connectivityListener);
         super.onDestroy();
+    }
+
+    private boolean requireOnline() {
+        if (NetworkUtils.isOnline()) {
+            return true;
+        }
+        Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+        return false;
+    }
+
+    private void detachQuestionsListener() {
+        if (questionsListener != null) {
+            questionsListener.remove();
+            questionsListener = null;
+        }
+    }
+
+    private void listenUsersOverlay() {
+        if (usersListener != null || !NetworkUtils.isOnline()) {
+            return;
+        }
+        usersListener = userService.listenUsers((snapshot, error) -> {
+            if (isFinishing() || isDestroyed() || error != null || snapshot == null) {
+                return;
+            }
+            liveUserNames.clear();
+            for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                User user = UserService.fromSnapshot(doc);
+                if (user == null || user.getUserId() == null) {
+                    continue;
+                }
+                if (user.getFullName() != null && !user.getFullName().trim().isEmpty()) {
+                    liveUserNames.put(user.getUserId(), user.getFullName().trim());
+                }
+                if (currentUser != null && user.getUserId().equals(currentUser.getUserId())) {
+                    currentUser = user;
+                    AuthHelper.setCurrentUser(user);
+                    bindNavAvatar();
+                }
+            }
+            overlayAuthorNames();
+        });
+    }
+
+    private void overlayAuthorNames() {
+        if (allQuestions.isEmpty() || liveUserNames.isEmpty()) {
+            return;
+        }
+        boolean changed = false;
+        for (Question question : allQuestions) {
+            String liveName = liveUserNames.get(question.getUserId());
+            if (liveName != null && !liveName.equals(question.getUserName())) {
+                question.setUserName(liveName);
+                changed = true;
+            }
+        }
+        if (changed && questionAdapter != null) {
+            applyFilters();
+        }
+    }
+
+    private void applyConnectivity(boolean online) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        if (online) {
+            loadQuestions();
+            loadSuggestions();
+            applyOfflineChrome();
+            return;
+        }
+        detachQuestionsListener();
+        if (usersListener != null) {
+            usersListener.remove();
+            usersListener = null;
+        }
+        if (!TAB_HOME.equals(currentTab)) {
+            selectTab(TAB_HOME);
+        }
+        showCachedQuestions(true);
+        applyOfflineChrome();
+    }
+
+    private void applyOfflineChrome() {
+        boolean online = NetworkUtils.isOnline();
+        if (fabAskQuestion != null) {
+            fabAskQuestion.setVisibility(online && TAB_HOME.equals(currentTab) ? View.VISIBLE : View.GONE);
+        }
+        if (!online) {
+            if (tvSuggestionTitle != null) {
+                tvSuggestionTitle.setVisibility(View.GONE);
+            }
+            if (rvSuggestedUsers != null) {
+                rvSuggestedUsers.setVisibility(View.GONE);
+            }
+            hideUserSearchResults();
+        }
     }
 
     private void setupBottomNav() {
@@ -887,18 +1060,36 @@ public class MainActivity extends AppCompatActivity {
             navHome.setOnClickListener(v -> selectTab(TAB_HOME));
         }
         if (navSearch != null) {
-            navSearch.setOnClickListener(v -> selectTab(TAB_SEARCH));
+            navSearch.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                selectTab(TAB_SEARCH);
+            });
         }
         if (navChat != null) {
-            navChat.setOnClickListener(v ->
-                    startActivity(new Intent(MainActivity.this, ChatListActivity.class)));
+            navChat.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                startActivity(new Intent(MainActivity.this, ChatListActivity.class));
+            });
         }
         if (navNotifications != null) {
-            navNotifications.setOnClickListener(v -> selectTab(TAB_NOTIFICATIONS));
+            navNotifications.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                selectTab(TAB_NOTIFICATIONS);
+            });
         }
         if (navProfile != null) {
-            navProfile.setOnClickListener(v ->
-                    startActivity(new Intent(MainActivity.this, ProfileActivity.class)));
+            navProfile.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                startActivity(new Intent(MainActivity.this, ProfileActivity.class));
+            });
         }
         highlightBottomNav();
     }
@@ -924,9 +1115,7 @@ public class MainActivity extends AppCompatActivity {
         if (panelNotifications != null) {
             panelNotifications.setVisibility(notifications ? View.VISIBLE : View.GONE);
         }
-        if (fabAskQuestion != null) {
-            fabAskQuestion.setVisibility(TAB_HOME.equals(tab) ? View.VISIBLE : View.GONE);
-        }
+        applyOfflineChrome();
         if (search) {
             searchMode = true;
             applySearchModeUi();
@@ -979,8 +1168,12 @@ public class MainActivity extends AppCompatActivity {
             tvNavAvatar.setText(name.substring(0, 1).toUpperCase(Locale.getDefault()));
             tvNavAvatar.setVisibility(View.VISIBLE);
             navProfile.setImageDrawable(null);
-            tvNavAvatar.setOnClickListener(v ->
-                    startActivity(new Intent(MainActivity.this, ProfileActivity.class)));
+            tvNavAvatar.setOnClickListener(v -> {
+                if (!requireOnline()) {
+                    return;
+                }
+                startActivity(new Intent(MainActivity.this, ProfileActivity.class));
+            });
         } else {
             tvNavAvatar.setVisibility(View.GONE);
             navProfile.setImageResource(R.drawable.ic_person);
@@ -1005,6 +1198,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean onOverflowItemSelected(MenuItem item) {
         int itemId = item.getItemId();
         if (itemId == R.id.action_profile) {
+            if (!requireOnline()) {
+                return true;
+            }
             startActivity(new Intent(this, ProfileActivity.class));
             return true;
         }

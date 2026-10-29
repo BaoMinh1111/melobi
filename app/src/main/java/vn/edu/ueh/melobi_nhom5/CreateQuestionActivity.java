@@ -1,7 +1,6 @@
 package vn.edu.ueh.melobi_nhom5;
 
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -9,8 +8,6 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -21,7 +18,6 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 import java.util.ArrayList;
-import java.util.UUID;
 
 import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.Question;
@@ -29,7 +25,7 @@ import vn.edu.ueh.melobi_nhom5.model.User;
 import vn.edu.ueh.melobi_nhom5.service.MajorService;
 import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
-import vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 /** Màn hình đăng câu hỏi mới. Đăng xong sẽ mở thẳng QuestionDetailActivity của câu hỏi đó. */
 public class CreateQuestionActivity extends AppCompatActivity {
@@ -52,8 +48,6 @@ public class CreateQuestionActivity extends AppCompatActivity {
     private String editQuestionId;
     private String editImageUrl;
     private String pendingMajorId;
-    private Uri selectedImageUri;
-    private FirebaseStorageManager storageManager;
 
     private MaterialToolbar toolbar;
     private TextInputLayout tilTitle, tilContent, tilMajor;
@@ -64,18 +58,15 @@ public class CreateQuestionActivity extends AppCompatActivity {
     private MaterialButton btnRemoveImage;
     private ImageView ivQuestionPreview;
     private ProgressBar pbPosting;
-    private final ActivityResultLauncher<String> pickImageLauncher =
-            registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
-                if (uri == null) {
-                    return;
-                }
-                selectedImageUri = uri;
-                showImagePreview(uri.toString(), true);
-            });
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
         setContentView(R.layout.activity_create_question);
 
         currentUser = AuthHelper.getCurrentUser();
@@ -86,7 +77,6 @@ public class CreateQuestionActivity extends AppCompatActivity {
         }
         questionService = new QuestionService();
         majorService = new MajorService();
-        storageManager = new FirebaseStorageManager();
         editQuestionId = getIntent().getStringExtra(EXTRA_EDIT_QUESTION_ID);
         editImageUrl = getIntent().getStringExtra(EXTRA_EDIT_IMAGE_URL);
         pendingMajorId = getIntent().getStringExtra(EXTRA_EDIT_MAJOR_ID);
@@ -97,12 +87,6 @@ public class CreateQuestionActivity extends AppCompatActivity {
 
         toolbar.setNavigationOnClickListener(v -> finish());
         btnPost.setOnClickListener(v -> submitQuestion());
-        if (btnAttachImage != null) {
-            btnAttachImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-        }
-        if (btnRemoveImage != null) {
-            btnRemoveImage.setOnClickListener(v -> clearSelectedImage());
-        }
     }
 
     private void bindEditMode() {
@@ -119,9 +103,6 @@ public class CreateQuestionActivity extends AppCompatActivity {
         if (content != null) {
             etContent.setText(content);
         }
-        if (editImageUrl != null && !editImageUrl.trim().isEmpty()) {
-            showImagePreview(editImageUrl, false);
-        }
     }
 
     private void initViews() {
@@ -137,46 +118,14 @@ public class CreateQuestionActivity extends AppCompatActivity {
         btnRemoveImage = findViewById(R.id.btnRemoveImage);
         ivQuestionPreview = findViewById(R.id.ivQuestionPreview);
         pbPosting = findViewById(R.id.pbPosting);
-    }
-
-    private void showImagePreview(String source, boolean localUri) {
-        if (ivQuestionPreview == null) {
-            return;
-        }
-        ivQuestionPreview.setVisibility(View.VISIBLE);
-        if (btnRemoveImage != null) {
-            btnRemoveImage.setVisibility(View.VISIBLE);
-        }
-        if (localUri) {
-            ivQuestionPreview.setImageURI(Uri.parse(source));
-            return;
-        }
-        FirebaseStorageManager.loadBitmap(source, 720, new FirebaseStorageManager.Callback<android.graphics.Bitmap>() {
-            @Override
-            public void onSuccess(android.graphics.Bitmap result) {
-                if (!isFinishing() && !isDestroyed() && ivQuestionPreview != null) {
-                    ivQuestionPreview.setImageBitmap(result);
-                }
-            }
-
-            @Override
-            public void onError(Exception e) {
-                if (!isFinishing() && !isDestroyed() && ivQuestionPreview != null) {
-                    ivQuestionPreview.setVisibility(View.GONE);
-                }
-            }
-        });
-    }
-
-    private void clearSelectedImage() {
-        selectedImageUri = null;
-        editImageUrl = null;
-        if (ivQuestionPreview != null) {
-            ivQuestionPreview.setImageDrawable(null);
-            ivQuestionPreview.setVisibility(View.GONE);
+        if (btnAttachImage != null) {
+            btnAttachImage.setVisibility(View.GONE);
         }
         if (btnRemoveImage != null) {
             btnRemoveImage.setVisibility(View.GONE);
+        }
+        if (ivQuestionPreview != null) {
+            ivQuestionPreview.setVisibility(View.GONE);
         }
     }
 
@@ -246,33 +195,15 @@ public class CreateQuestionActivity extends AppCompatActivity {
     }
 
     private void submitQuestion() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         String title = etTitle.getText() != null ? etTitle.getText().toString().trim() : "";
         String content = etContent.getText() != null ? etContent.getText().toString().trim() : "";
         if (!validate(title, content)) return;
 
         setPosting(true);
-        if (selectedImageUri != null) {
-            String storageId = editQuestionId != null && !editQuestionId.trim().isEmpty()
-                    ? editQuestionId
-                    : UUID.randomUUID().toString();
-            storageManager.uploadQuestionImage(storageId, selectedImageUri, new FirebaseStorageManager.Callback<String>() {
-                @Override
-                public void onSuccess(String uploadedUrl) {
-                    editImageUrl = uploadedUrl;
-                    persistQuestion(title, content);
-                }
-
-                @Override
-                public void onError(Exception e) {
-                    if (isFinishing() || isDestroyed()) {
-                        return;
-                    }
-                    setPosting(false);
-                    Toast.makeText(CreateQuestionActivity.this, e.getMessage(), Toast.LENGTH_LONG).show();
-                }
-            });
-            return;
-        }
         persistQuestion(title, content);
     }
 

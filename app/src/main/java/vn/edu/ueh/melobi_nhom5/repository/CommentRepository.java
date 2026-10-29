@@ -4,9 +4,12 @@ import android.util.Log;
 
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.MetadataChanges;
+import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.WriteBatch;
 
 import java.util.ArrayList;
@@ -14,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.model.Comment;
+import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
 
 public class CommentRepository {
     private static final String TAG = "CommentRepository";
@@ -29,6 +33,30 @@ public class CommentRepository {
 
     public CommentRepository() {
         this.db = FirebaseFirestore.getInstance();
+    }
+
+    public ListenerRegistration listenComments(String answerId, EventListener<QuerySnapshot> listener) {
+        return db.collection(COLLECTION_COMMENTS)
+                .whereEqualTo("answerId", answerId)
+                .addSnapshotListener(MetadataChanges.INCLUDE, listener);
+    }
+
+    public List<Comment> mapComments(QuerySnapshot snapshot) {
+        List<Comment> list = new ArrayList<>();
+        if (snapshot == null) {
+            return list;
+        }
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            Comment comment = doc.toObject(Comment.class);
+            if (comment != null) {
+                if (comment.getId() == null || comment.getId().isEmpty()) {
+                    comment.setId(doc.getId());
+                }
+                list.add(comment);
+            }
+        }
+        Collections.sort(list, (c1, c2) -> Long.compare(c1.getCreatedAt(), c2.getCreatedAt()));
+        return list;
     }
 
     // Lấy danh sách bình luận theo answerId, sắp xếp theo thời gian tăng dần
@@ -61,6 +89,12 @@ public class CommentRepository {
 
     // Thêm bình luận mới vào câu trả lời
     public void addComment(Comment comment, Callback<Comment> callback) {
+        if (!NetworkUtils.isOnline()) {
+            if (callback != null) {
+                callback.onError(NetworkUtils.offlineException());
+            }
+            return;
+        }
         DocumentReference commentRef = db.collection(COLLECTION_COMMENTS).document();
         comment.setId(commentRef.getId());
 

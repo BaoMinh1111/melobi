@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class DatabaseHelper extends SQLiteOpenHelper {
     /* Khai báo Constant -> Tránh sai chính tả */
     private static final String DATABASE_NAME = "melobi_offline.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 4;
 
     public static final String TABLE_QUESTION = "Question";
     public static final String TABLE_ANSWER = "Answer";
@@ -154,6 +154,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             try {
                 db.execSQL("ALTER TABLE " + TABLE_QUESTION + " ADD COLUMN "
                         + COL_Q_LAST_VIEWED_AT + " INTEGER DEFAULT 0");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        if (oldVersion < 4) {
+            try {
+                db.execSQL("UPDATE " + TABLE_QUESTION + " SET " + COL_Q_LAST_VIEWED_AT + " = 0");
             } catch (Exception e) {
                 e.printStackTrace();
             }

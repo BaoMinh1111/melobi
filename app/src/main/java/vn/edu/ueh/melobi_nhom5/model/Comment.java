@@ -1,5 +1,7 @@
 package vn.edu.ueh.melobi_nhom5.model;
 
+import com.google.firebase.firestore.Exclude;
+
 import java.io.Serializable;
 
 public class Comment implements Serializable {
@@ -9,6 +11,9 @@ public class Comment implements Serializable {
     private String userName;
     private String userAvatarUrl;
     private String content;
+    private String parentId;
+    private String replyToUserId;
+    private String replyToUserName;
     private long createdAt;
     private long updatedAt;
 
@@ -80,6 +85,35 @@ public class Comment implements Serializable {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    public String getReplyToUserId() {
+        return replyToUserId;
+    }
+
+    public void setReplyToUserId(String replyToUserId) {
+        this.replyToUserId = replyToUserId;
+    }
+
+    public String getReplyToUserName() {
+        return replyToUserName;
+    }
+
+    public void setReplyToUserName(String replyToUserName) {
+        this.replyToUserName = replyToUserName;
+    }
+
+    @Exclude
+    public boolean isReply() {
+        return parentId != null && !parentId.trim().isEmpty();
     }
 
     public long getCreatedAt() {

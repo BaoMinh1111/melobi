@@ -126,8 +126,17 @@ public class QuestionDetailActivity extends AppCompatActivity {
         btnSendAnswer.setOnClickListener(v -> submitAnswer());
         btnSendAnswer.setEnabled(false);          // chỉ cho gửi sau khi xác nhận câu hỏi còn hiển thị
 
-        if (question != null) displayQuestionInfo();   // hiển thị tạm bản truyền sang
         skipNextResumeLoad = true;
+        if (!NetworkUtils.isOnline()) {
+            if (!showCachedQuestionIfNeeded()) {
+                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                loadAnswers();
+            }
+            return;
+        }
+        if (question != null) displayQuestionInfo();   // hiển thị tạm bản truyền sang
         loadQuestion();
         loadAnswers();
     }
@@ -228,10 +237,11 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
     /** Tải câu hỏi mới nhất từ Firestore; đóng màn hình nếu đã bị xóa hoặc bị ẩn. */
     private void loadQuestion() {
-        if (!NetworkUtils.isOnline() && question != null) {
-            displayQuestionInfo();
-            btnSendAnswer.setEnabled(false);
-            Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+        if (!NetworkUtils.isOnline()) {
+            if (!showCachedQuestionIfNeeded()) {
+                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                finish();
+            }
             return;
         }
         if (questionListener != null) {
@@ -276,7 +286,12 @@ public class QuestionDetailActivity extends AppCompatActivity {
             if (questionId.equals(item.getQuestionId())) {
                 question = item;
                 displayQuestionInfo();
-                btnSendAnswer.setEnabled(false);
+                if (btnSendAnswer != null) {
+                    btnSendAnswer.setEnabled(false);
+                }
+                if (etAnswerInput != null) {
+                    etAnswerInput.setEnabled(false);
+                }
                 Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
                 return true;
             }
@@ -292,8 +307,8 @@ public class QuestionDetailActivity extends AppCompatActivity {
         tvQuestionTitle.setText(question.getTitle());
         tvQuestionContent.setText(question.getContent());
 
-        String name = question.getUserName();
-        String author = name != null && !name.isEmpty() ? name : "Thành viên";
+        String author = vn.edu.ueh.melobi_nhom5.util.UserNameLookup.resolve(
+                question.getUserId(), question.getUserName());
         tvQuestionAuthorName.setText(author);
         tvQuestionAvatar.setText(author.substring(0, 1).toUpperCase());
 
@@ -312,38 +327,17 @@ public class QuestionDetailActivity extends AppCompatActivity {
         bindQuestionImage();
         bindQuestionLike();
         bindOwnerMenu();
+        if (NetworkUtils.isOnline()) {
+            syncManager.cacheQuestionDetail(question, syncManager.getCachedAnswers(questionId));
+        }
     }
 
     private void bindQuestionImage() {
         if (ivQuestionImage == null) {
             return;
         }
-        String imageUrl = question != null ? question.getImageUrl() : null;
-        if (imageUrl == null || imageUrl.trim().isEmpty()) {
-            ivQuestionImage.setVisibility(View.GONE);
-            ivQuestionImage.setImageDrawable(null);
-            return;
-        }
-        ivQuestionImage.setVisibility(View.VISIBLE);
-        vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager.loadBitmap(
-                imageUrl,
-                1080,
-                new vn.edu.ueh.melobi_nhom5.util.FirebaseStorageManager.Callback<android.graphics.Bitmap>() {
-                    @Override
-                    public void onSuccess(android.graphics.Bitmap result) {
-                        if (!isFinishing() && !isDestroyed() && ivQuestionImage != null) {
-                            ivQuestionImage.setImageBitmap(result);
-                        }
-                    }
-
-                    @Override
-                    public void onError(Exception e) {
-                        if (!isFinishing() && !isDestroyed() && ivQuestionImage != null) {
-                            ivQuestionImage.setVisibility(View.GONE);
-                        }
-                    }
-                }
-        );
+        ivQuestionImage.setVisibility(View.GONE);
+        ivQuestionImage.setImageDrawable(null);
     }
 
     private void bindQuestionLike() {
@@ -371,6 +365,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void toggleQuestionLike() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (question == null || currentUser == null) {
             return;
         }
@@ -393,6 +391,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void openAuthorProfile() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (question == null) {
             return;
         }
@@ -400,6 +402,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void openEditQuestion() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (!isQuestionOwner()) {
             Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
             return;
@@ -414,6 +420,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteQuestion() {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (!isQuestionOwner()) {
             Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
             return;
@@ -457,6 +467,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
 
             @Override
             public void onAuthorClick(Answer answer) {
+                if (!NetworkUtils.isOnline()) {
+                    Toast.makeText(QuestionDetailActivity.this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 ProfileActivity.openProfile(QuestionDetailActivity.this, answer.getUserId(), answer.getUserName());
             }
         });
@@ -556,6 +570,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void toggleLike(Answer answer) {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         answerRepository.toggleLike(answer.getId(), currentUser.getId(), new AnswerRepository.Callback<Answer>() {
             @Override
             public void onSuccess(Answer result) {
@@ -578,6 +596,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void showEditAnswerDialog(Answer answer) {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (!isOwnContent(answer.getUserId())) {
             Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
             return;
@@ -613,6 +635,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteAnswer(Answer answer) {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (!isOwnContent(answer.getUserId())) {
             Toast.makeText(this, R.string.error_own_content_only, Toast.LENGTH_SHORT).show();
             return;
@@ -639,6 +665,10 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private void openCommentsBottomSheet(Answer answer) {
+        if (!NetworkUtils.isOnline()) {
+            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+            return;
+        }
         CommentBottomSheetDialogFragment bottomSheet = CommentBottomSheetDialogFragment.newInstance(answer.getId());
         bottomSheet.setOnCommentUpdatedListener(() -> loadAnswers());
         bottomSheet.show(getSupportFragmentManager(), "CommentBottomSheet");
