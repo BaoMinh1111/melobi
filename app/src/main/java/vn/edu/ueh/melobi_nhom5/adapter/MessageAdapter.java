@@ -107,9 +107,11 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
             }
 
             if (sent) {
-                String readState = message.getIsRead()
+                String readState = message.isPending()
+                        ? itemView.getContext().getString(R.string.label_message_pending)
+                        : (message.getIsRead()
                         ? itemView.getContext().getString(R.string.label_message_read)
-                        : itemView.getContext().getString(R.string.label_message_sent);
+                        : itemView.getContext().getString(R.string.label_message_sent));
                 tvMessageStatus.setText(timeText.isEmpty() ? readState : readState + " • " + timeText);
             } else {
                 tvMessageStatus.setText(timeText);

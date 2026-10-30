@@ -245,12 +245,8 @@ public class MainActivity extends AppCompatActivity {
         tvNavAvatar = findViewById(R.id.tvNavAvatar);
         fabAskQuestion = findViewById(R.id.fabAskQuestion);
         if (fabAskQuestion != null) {
-            fabAskQuestion.setOnClickListener(v -> {
-                if (!requireOnline()) {
-                    return;
-                }
-                startActivity(new Intent(MainActivity.this, CreateQuestionActivity.class));
-            });
+            fabAskQuestion.setOnClickListener(v ->
+                    startActivity(new Intent(MainActivity.this, CreateQuestionActivity.class)));
         }
         bindNavAvatar();
         if (etSearchQuestion != null && currentKeyword != null && !currentKeyword.isEmpty()) {
@@ -350,6 +346,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupRecyclerView() {
         questionAdapter = new QuestionAdapter(question -> {
+            if (!canOpenQuestionDetail(question)) {
+                return;
+            }
             Intent intent = new Intent(MainActivity.this, QuestionDetailActivity.class);
             intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
             startActivity(intent);
@@ -823,6 +822,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (error != null) {
                 Log.e(TAG, "Lỗi lắng nghe câu hỏi: ", error);
+                NetworkUtils.markOffline();
                 showCachedQuestions(true);
                 return;
             }
@@ -966,6 +966,18 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    private boolean canOpenQuestionDetail(Question question) {
+        if (NetworkUtils.isOnline()) {
+            return true;
+        }
+        String questionId = question != null ? question.getQuestionId() : null;
+        if (syncManager.isQuestionCachedLastDay(questionId)) {
+            return true;
+        }
+        Toast.makeText(this, R.string.error_offline_question_detail, Toast.LENGTH_LONG).show();
+        return false;
+    }
+
     private void detachQuestionsListener() {
         if (questionsListener != null) {
             questionsListener.remove();
@@ -1042,7 +1054,7 @@ public class MainActivity extends AppCompatActivity {
     private void applyOfflineChrome() {
         boolean online = NetworkUtils.isOnline();
         if (fabAskQuestion != null) {
-            fabAskQuestion.setVisibility(online && TAB_HOME.equals(currentTab) ? View.VISIBLE : View.GONE);
+            fabAskQuestion.setVisibility(TAB_HOME.equals(currentTab) ? View.VISIBLE : View.GONE);
         }
         if (!online) {
             if (tvSuggestionTitle != null) {
@@ -1068,12 +1080,8 @@ public class MainActivity extends AppCompatActivity {
             });
         }
         if (navChat != null) {
-            navChat.setOnClickListener(v -> {
-                if (!requireOnline()) {
-                    return;
-                }
-                startActivity(new Intent(MainActivity.this, ChatListActivity.class));
-            });
+            navChat.setOnClickListener(v ->
+                    startActivity(new Intent(MainActivity.this, ChatListActivity.class)));
         }
         if (navNotifications != null) {
             navNotifications.setOnClickListener(v -> {

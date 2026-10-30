@@ -53,6 +53,34 @@ public class ChatService {
         notificationService = new NotificationService();
     }
 
+    public static String conversationIdFor(String user1Id, String user2Id) {
+        if (user1Id == null || user2Id == null) {
+            return null;
+        }
+        String first = user1Id.compareTo(user2Id) < 0 ? user1Id : user2Id;
+        String second = user1Id.compareTo(user2Id) < 0 ? user2Id : user1Id;
+        String key = first.length() + ":" + first + second;
+        return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    public Task<Message> ensureConversationThenSend(String senderId,
+                                                    String otherUserId,
+                                                    String conversationId,
+                                                    String content) {
+        String resolvedConversationId = conversationId;
+        if (isInvalidId(resolvedConversationId) && !isInvalidId(senderId) && !isInvalidId(otherUserId)) {
+            resolvedConversationId = conversationIdFor(senderId, otherUserId);
+        }
+        if (isInvalidId(otherUserId)) {
+            return sendQueuedMessage(resolvedConversationId, senderId, content);
+        }
+        String finalConversationId = resolvedConversationId;
+        return createConversation(senderId, otherUserId).continueWithTask(task -> {
+            task.getResult();
+            return sendQueuedMessage(finalConversationId, senderId, content);
+        });
+    }
+
     public Task<Conversation> createConversation(String user1Id, String user2Id) {
         if (!NetworkUtils.isOnline()) {
             return Tasks.forException(NetworkUtils.offlineException());
@@ -69,7 +97,7 @@ public class ChatService {
 
         String first = user1Id.compareTo(user2Id) < 0 ? user1Id : user2Id;
         String second = user1Id.compareTo(user2Id) < 0 ? user2Id : user1Id;
-        String conversationId = buildConversationId(user1Id, user2Id);
+        String conversationId = conversationIdFor(user1Id, user2Id);
         DocumentReference ref = db.collection(COL_CONVERSATIONS).document(conversationId);
 
         Conversation conversation = new Conversation(conversationId, first, second, "", new Date());
@@ -94,6 +122,14 @@ public class ChatService {
         if (!NetworkUtils.isOnline()) {
             return Tasks.forException(NetworkUtils.offlineException());
         }
+        return sendQueuedMessage(conversationId, senderId, content, imageUrl);
+    }
+
+    public Task<Message> sendQueuedMessage(String conversationId, String senderId, String content) {
+        return sendQueuedMessage(conversationId, senderId, content, null);
+    }
+
+    public Task<Message> sendQueuedMessage(String conversationId, String senderId, String content, String imageUrl) {
         if (FirebaseAuth.getInstance().getCurrentUser() == null) {
             return Tasks.forException(new IllegalStateException("Chua dang nhap"));
         }
@@ -418,10 +454,7 @@ public class ChatService {
     }
 
     private String buildConversationId(String user1Id, String user2Id) {
-        String first = user1Id.compareTo(user2Id) < 0 ? user1Id : user2Id;
-        String second = user1Id.compareTo(user2Id) < 0 ? user2Id : user1Id;
-        String key = first.length() + ":" + first + second;
-        return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
+        return conversationIdFor(user1Id, user2Id);
     }
 
     private static String firstNonEmpty(String first, String second) {

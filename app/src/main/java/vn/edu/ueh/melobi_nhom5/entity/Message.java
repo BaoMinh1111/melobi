@@ -14,6 +14,7 @@ public class Message {
     private String imageUrl;
     private Date sentAt;
     private boolean isRead;
+    private boolean pending;
 
     public Message() {
     }
@@ -93,5 +94,15 @@ public class Message {
     @Exclude
     public boolean isRead() {
         return isRead;
+    }
+
+    @Exclude
+    public boolean isPending() {
+        return pending;
+    }
+
+    @Exclude
+    public void setPending(boolean pending) {
+        this.pending = pending;
     }
 }

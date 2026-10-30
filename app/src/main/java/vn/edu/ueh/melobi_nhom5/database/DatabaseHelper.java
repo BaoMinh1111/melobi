@@ -7,11 +7,12 @@ import android.database.sqlite.SQLiteOpenHelper;
 public class DatabaseHelper extends SQLiteOpenHelper {
     /* Khai báo Constant -> Tránh sai chính tả */
     private static final String DATABASE_NAME = "melobi_offline.db";
-    private static final int DATABASE_VERSION = 4;
+    private static final int DATABASE_VERSION = 5;
 
     public static final String TABLE_QUESTION = "Question";
     public static final String TABLE_ANSWER = "Answer";
     public static final String TABLE_USER_CACHE = "UserCache";
+    public static final String TABLE_PENDING_MESSAGE = "PendingMessage";
 
     // Các trạng thái đồng bộ
     public static final String SYNC_STATUS_SYNCED = "SYNCED";
@@ -35,6 +36,15 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     public static final String COL_Q_AUTHOR_NAME = "authorName";
     public static final String COL_Q_AUTHOR_AVATAR = "authorAvatarUrl";
     public static final String COL_Q_LAST_VIEWED_AT = "lastViewedAt";
+    public static final String COL_Q_CATEGORY = "category";
+
+    public static final String COL_PM_ID = "messageId";
+    public static final String COL_PM_CONVERSATION_ID = "conversationId";
+    public static final String COL_PM_OTHER_USER_ID = "otherUserId";
+    public static final String COL_PM_SENDER_ID = "senderId";
+    public static final String COL_PM_CONTENT = "content";
+    public static final String COL_PM_CREATED_AT = "createdAt";
+    public static final String COL_PM_SYNC_STATUS = "syncStatus";
 
     // Cột của bảng ANSWER
     public static final String COL_A_ID = "answerId";
@@ -87,7 +97,8 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 + COL_Q_SYNC_STATUS + " TEXT DEFAULT '" + SYNC_STATUS_SYNCED + "', "
                 + COL_Q_AUTHOR_NAME + " TEXT, "
                 + COL_Q_AUTHOR_AVATAR + " TEXT, "
-                + COL_Q_LAST_VIEWED_AT + " INTEGER DEFAULT 0)";
+                + COL_Q_LAST_VIEWED_AT + " INTEGER DEFAULT 0, "
+                + COL_Q_CATEGORY + " TEXT)";
 
         // Câu lệnh SQL tạo bảng Answer
         String CREATE_ANSWER_TABLE = "CREATE TABLE " + TABLE_ANSWER + " ("
@@ -110,9 +121,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 + COL_U_AVATAR + " TEXT)";
 
         // Thực thi lệnh tạo bảng
+        String CREATE_PENDING_MESSAGE_TABLE = "CREATE TABLE " + TABLE_PENDING_MESSAGE + " ("
+                + COL_PM_ID + " TEXT PRIMARY KEY, "
+                + COL_PM_CONVERSATION_ID + " TEXT, "
+                + COL_PM_OTHER_USER_ID + " TEXT, "
+                + COL_PM_SENDER_ID + " TEXT, "
+                + COL_PM_CONTENT + " TEXT, "
+                + COL_PM_CREATED_AT + " INTEGER, "
+                + COL_PM_SYNC_STATUS + " TEXT DEFAULT '" + SYNC_STATUS_PENDING_ADD + "')";
+
         db.execSQL(CREATE_QUESTION_TABLE);
         db.execSQL(CREATE_ANSWER_TABLE);
         db.execSQL(CREATE_USER_CACHE_TABLE);
+        db.execSQL(CREATE_PENDING_MESSAGE_TABLE);
 
         // Tạo INDEX cho cột SYNC_STATUS
         db.execSQL("CREATE INDEX idx_question_sync ON " + TABLE_QUESTION + "(" + COL_Q_SYNC_STATUS + ")");
@@ -161,6 +182,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         if (oldVersion < 4) {
             try {
                 db.execSQL("UPDATE " + TABLE_QUESTION + " SET " + COL_Q_LAST_VIEWED_AT + " = 0");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        if (oldVersion < 5) {
+            try {
+                db.execSQL("ALTER TABLE " + TABLE_QUESTION + " ADD COLUMN " + COL_Q_CATEGORY + " TEXT");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            try {
+                db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_PENDING_MESSAGE + " ("
+                        + COL_PM_ID + " TEXT PRIMARY KEY, "
+                        + COL_PM_CONVERSATION_ID + " TEXT, "
+                        + COL_PM_OTHER_USER_ID + " TEXT, "
+                        + COL_PM_SENDER_ID + " TEXT, "
+                        + COL_PM_CONTENT + " TEXT, "
+                        + COL_PM_CREATED_AT + " INTEGER, "
+                        + COL_PM_SYNC_STATUS + " TEXT DEFAULT '" + SYNC_STATUS_PENDING_ADD + "')");
             } catch (Exception e) {
                 e.printStackTrace();
             }

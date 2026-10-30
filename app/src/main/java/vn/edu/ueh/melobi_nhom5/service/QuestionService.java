@@ -47,6 +47,10 @@ public class QuestionService {
         if (!NetworkUtils.isOnline()) {
             return Tasks.forException(NetworkUtils.offlineException());
         }
+        return publishQuestion(question);
+    }
+
+    public Task<DocumentReference> publishQuestion(Question question) {
         String title = question.getTitle() != null ? question.getTitle().trim() : "";
         String content = question.getContent() != null ? question.getContent().trim() : "";
         long now = System.currentTimeMillis();

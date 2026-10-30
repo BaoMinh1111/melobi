@@ -167,6 +167,12 @@ public class ProfileActivity extends AppCompatActivity {
         tvLikedTitle = findViewById(R.id.tvLikedTitle);
 
         questionAdapter = new QuestionAdapter(question -> {
+            if (!NetworkUtils.isOnline()
+                    && !vn.edu.ueh.melobi_nhom5.util.SyncManager.getInstance(this)
+                    .isQuestionCachedLastDay(question.getQuestionId())) {
+                Toast.makeText(this, R.string.error_offline_question_detail, Toast.LENGTH_LONG).show();
+                return;
+            }
             Intent intent = new Intent(this, QuestionDetailActivity.class);
             intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
             startActivity(intent);
@@ -175,6 +181,12 @@ public class ProfileActivity extends AppCompatActivity {
         rvProfileQuestions.setAdapter(questionAdapter);
 
         likedAdapter = new QuestionAdapter(question -> {
+            if (!NetworkUtils.isOnline()
+                    && !vn.edu.ueh.melobi_nhom5.util.SyncManager.getInstance(this)
+                    .isQuestionCachedLastDay(question.getQuestionId())) {
+                Toast.makeText(this, R.string.error_offline_question_detail, Toast.LENGTH_LONG).show();
+                return;
+            }
             Intent intent = new Intent(this, QuestionDetailActivity.class);
             intent.putExtra(QuestionDetailActivity.EXTRA_QUESTION, question);
             startActivity(intent);

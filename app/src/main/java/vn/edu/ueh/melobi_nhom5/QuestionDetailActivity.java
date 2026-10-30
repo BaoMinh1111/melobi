@@ -129,7 +129,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
         skipNextResumeLoad = true;
         if (!NetworkUtils.isOnline()) {
             if (!showCachedQuestionIfNeeded()) {
-                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.error_offline_question_detail, Toast.LENGTH_LONG).show();
                 finish();
             } else {
                 loadAnswers();
@@ -239,7 +239,7 @@ public class QuestionDetailActivity extends AppCompatActivity {
     private void loadQuestion() {
         if (!NetworkUtils.isOnline()) {
             if (!showCachedQuestionIfNeeded()) {
-                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.error_offline_question_detail, Toast.LENGTH_LONG).show();
                 finish();
             }
             return;
@@ -278,6 +278,19 @@ public class QuestionDetailActivity extends AppCompatActivity {
     }
 
     private boolean showCachedQuestionIfNeeded() {
+        Question cachedQuestion = syncManager.getCachedQuestion(questionId);
+        if (cachedQuestion != null) {
+            question = cachedQuestion;
+            displayQuestionInfo();
+            if (btnSendAnswer != null) {
+                btnSendAnswer.setEnabled(false);
+            }
+            if (etAnswerInput != null) {
+                etAnswerInput.setEnabled(false);
+            }
+            Toast.makeText(this, R.string.message_offline_cached, Toast.LENGTH_SHORT).show();
+            return true;
+        }
         List<Question> cached = syncManager.getViewedQuestionsLastDay();
         if (cached == null) {
             return false;

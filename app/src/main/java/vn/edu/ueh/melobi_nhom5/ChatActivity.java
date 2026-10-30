@@ -28,6 +28,7 @@ import vn.edu.ueh.melobi_nhom5.service.ChatService;
 import vn.edu.ueh.melobi_nhom5.service.UserService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.SyncManager;
 
 public class ChatActivity extends AppCompatActivity {
 
@@ -48,6 +49,14 @@ public class ChatActivity extends AppCompatActivity {
     private String otherUserId;
     private String otherUserName;
     private boolean sending;
+    private SyncManager syncManager;
+    private final NetworkUtils.ConnectivityListener connectivityListener = online ->
+            runOnUiThread(() -> {
+                if (online) {
+                    ensureConversationThenListen();
+                    SyncManager.getInstance(ChatActivity.this).syncAll();
+                }
+            });
 
     private MaterialToolbar toolbarChat;
     private RecyclerView rvMessages;
@@ -60,12 +69,6 @@ public class ChatActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        if (!NetworkUtils.isOnline()) {
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
 
         if (!AuthHelper.isLoggedIn()) {
             navigateToLogin();
@@ -94,6 +97,12 @@ public class ChatActivity extends AppCompatActivity {
 
         chatService = new ChatService();
         userService = new UserService();
+        syncManager = SyncManager.getInstance(this);
+        if ((conversationId == null || conversationId.trim().isEmpty())
+                && otherUserId != null && !otherUserId.trim().isEmpty()) {
+            conversationId = ChatService.conversationIdFor(currentUserId, otherUserId);
+        }
+        NetworkUtils.addListener(connectivityListener);
 
         toolbarChat = findViewById(R.id.toolbarChat);
         rvMessages = findViewById(R.id.rvMessages);
@@ -141,6 +150,7 @@ public class ChatActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        NetworkUtils.removeListener(connectivityListener);
         removeMessagesListener();
         super.onDestroy();
     }
@@ -192,6 +202,11 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void ensureConversationThenListen() {
+        if (!NetworkUtils.isOnline()) {
+            pbChatLoading.setVisibility(View.GONE);
+            bindMessages(new java.util.ArrayList<>());
+            return;
+        }
         if (otherUserId != null && !otherUserId.trim().isEmpty()) {
             pbChatLoading.setVisibility(View.VISIBLE);
             chatService.createConversation(currentUserId, otherUserId)
@@ -207,7 +222,7 @@ public class ChatActivity extends AppCompatActivity {
                             return;
                         }
                         pbChatLoading.setVisibility(View.GONE);
-                        Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                        bindMessages(new java.util.ArrayList<>());
                     });
             return;
         }
@@ -246,8 +261,7 @@ public class ChatActivity extends AppCompatActivity {
             }
             pbChatLoading.setVisibility(View.GONE);
             if (error != null) {
-                tvChatEmpty.setVisibility(View.VISIBLE);
-                Toast.makeText(this, error.getMessage(), Toast.LENGTH_SHORT).show();
+                bindMessages(new java.util.ArrayList<>());
                 return;
             }
             List<Message> messages = ChatService.mapMessages(snapshot);
@@ -264,9 +278,13 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void bindMessages(List<Message> messages) {
-        boolean empty = messages == null || messages.isEmpty();
+        List<Message> merged = messages != null ? new java.util.ArrayList<>(messages) : new java.util.ArrayList<>();
+        if (conversationId != null) {
+            merged.addAll(syncManager.getPendingMessages(conversationId));
+        }
+        boolean empty = merged.isEmpty();
         tvChatEmpty.setVisibility(empty ? View.VISIBLE : View.GONE);
-        messageAdapter.setMessages(messages);
+        messageAdapter.setMessages(merged);
         if (!empty) {
             rvMessages.scrollToPosition(messageAdapter.getItemCount() - 1);
         }
@@ -283,9 +301,10 @@ public class ChatActivity extends AppCompatActivity {
         if (sending) {
             return;
         }
-        if (!NetworkUtils.isOnline()) {
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
-            return;
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            if (otherUserId != null && !otherUserId.trim().isEmpty()) {
+                conversationId = ChatService.conversationIdFor(currentUserId, otherUserId);
+            }
         }
         if (conversationId == null || conversationId.trim().isEmpty()) {
             Toast.makeText(this, "Cuộc trò chuyện chưa sẵn sàng", Toast.LENGTH_SHORT).show();
@@ -298,6 +317,14 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
+        if (!NetworkUtils.isOnline()) {
+            syncManager.queueMessage(conversationId, otherUserId, currentUserId, content);
+            etMessageInput.setText("");
+            bindMessages(new java.util.ArrayList<>());
+            Toast.makeText(this, R.string.message_message_saved_offline, Toast.LENGTH_LONG).show();
+            return;
+        }
+
         sending = true;
         btnSendMessage.setEnabled(false);
         etMessageInput.setText("");
@@ -306,8 +333,9 @@ public class ChatActivity extends AppCompatActivity {
                     if (isFinishing() || isDestroyed()) {
                         return;
                     }
-                    etMessageInput.setText(content);
-                    Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
+                    syncManager.queueMessage(conversationId, otherUserId, currentUserId, content);
+                    bindMessages(new java.util.ArrayList<>());
+                    Toast.makeText(this, R.string.message_message_saved_offline, Toast.LENGTH_LONG).show();
                 })
                 .addOnCompleteListener(task -> resetSending());
     }

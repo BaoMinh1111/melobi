@@ -50,12 +50,6 @@ public class ChatListActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (!NetworkUtils.isOnline()) {
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
         if (!AuthHelper.isLoggedIn()) {
             navigateToLogin();
             return;

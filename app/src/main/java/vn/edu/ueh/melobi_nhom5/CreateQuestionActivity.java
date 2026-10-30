@@ -18,6 +18,7 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import vn.edu.ueh.melobi_nhom5.model.Major;
 import vn.edu.ueh.melobi_nhom5.model.Question;
@@ -26,6 +27,8 @@ import vn.edu.ueh.melobi_nhom5.service.MajorService;
 import vn.edu.ueh.melobi_nhom5.service.QuestionService;
 import vn.edu.ueh.melobi_nhom5.util.AuthHelper;
 import vn.edu.ueh.melobi_nhom5.util.NetworkUtils;
+import vn.edu.ueh.melobi_nhom5.util.SampleDataInitializer;
+import vn.edu.ueh.melobi_nhom5.util.SyncManager;
 
 /** Màn hình đăng câu hỏi mới. Đăng xong sẽ mở thẳng QuestionDetailActivity của câu hỏi đó. */
 public class CreateQuestionActivity extends AppCompatActivity {
@@ -62,11 +65,6 @@ public class CreateQuestionActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (!NetworkUtils.isOnline()) {
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
         setContentView(R.layout.activity_create_question);
 
         currentUser = AuthHelper.getCurrentUser();
@@ -142,16 +140,17 @@ public class CreateQuestionActivity extends AppCompatActivity {
                 .addOnSuccessListener(majors -> {
                     if (isFinishing() || isDestroyed()) return;
                     majorAdapter.clear();
+                    if (majors == null || majors.isEmpty()) {
+                        bindOfflineMajors();
+                        return;
+                    }
                     majorAdapter.addAll(majors);
                     actvMajor.setEnabled(true);
-                    if (majors.isEmpty()) {
-                        Toast.makeText(this, "Chưa có dữ liệu ngành", Toast.LENGTH_SHORT).show();
-                    }
                     preselectMajor(majors);
                 })
                 .addOnFailureListener(e -> {
                     if (isFinishing() || isDestroyed()) return;
-                    Toast.makeText(this, "Lỗi tải danh sách ngành: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    bindOfflineMajors();
                 });
     }
 
@@ -194,11 +193,19 @@ public class CreateQuestionActivity extends AppCompatActivity {
         return ok;
     }
 
-    private void submitQuestion() {
-        if (!NetworkUtils.isOnline()) {
-            Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
-            return;
+    private void bindOfflineMajors() {
+        List<Major> majors = SampleDataInitializer.getSampleMajors();
+        majorAdapter.clear();
+        majorAdapter.addAll(majors);
+        actvMajor.setEnabled(true);
+        preselectMajor(majors);
+        if (selectedMajor == null && currentUser != null && currentUser.getMajorId() != null) {
+            pendingMajorId = currentUser.getMajorId();
+            preselectMajor(majors);
         }
+    }
+
+    private void submitQuestion() {
         String title = etTitle.getText() != null ? etTitle.getText().toString().trim() : "";
         String content = etContent.getText() != null ? etContent.getText().toString().trim() : "";
         if (!validate(title, content)) return;
@@ -212,6 +219,11 @@ public class CreateQuestionActivity extends AppCompatActivity {
             return;
         }
         if (editQuestionId != null && !editQuestionId.trim().isEmpty()) {
+            if (!NetworkUtils.isOnline()) {
+                setPosting(false);
+                Toast.makeText(this, R.string.error_no_internet, Toast.LENGTH_SHORT).show();
+                return;
+            }
             questionService.updateQuestion(editQuestionId, title, content, editImageUrl)
                     .addOnSuccessListener(unused -> {
                         if (isFinishing() || isDestroyed()) return;
@@ -238,6 +250,14 @@ public class CreateQuestionActivity extends AppCompatActivity {
         question.setImageUrl(editImageUrl);
         // id, status, createdAt, titleLower... do QuestionService.createQuestion tự điền
 
+        if (!NetworkUtils.isOnline()) {
+            SyncManager.getInstance(this).queueQuestion(question);
+            Toast.makeText(this, R.string.message_question_saved_offline, Toast.LENGTH_LONG).show();
+            setResult(RESULT_OK);
+            finish();
+            return;
+        }
+
         questionService.createQuestion(question)
                 .addOnSuccessListener(ref -> {
                     if (isFinishing() || isDestroyed()) return;
@@ -251,8 +271,10 @@ public class CreateQuestionActivity extends AppCompatActivity {
                 })
                 .addOnFailureListener(e -> {
                     if (isFinishing() || isDestroyed()) return;
-                    setPosting(false);
-                    Toast.makeText(this, "Đăng câu hỏi thất bại: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    SyncManager.getInstance(this).queueQuestion(question);
+                    Toast.makeText(this, R.string.message_question_saved_offline, Toast.LENGTH_LONG).show();
+                    setResult(RESULT_OK);
+                    finish();
                 });
     }
 

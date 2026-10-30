@@ -60,6 +60,10 @@
     <string name="message_register_success">Đăng ký thành công</string>
     <string name="message_profile_updated">Cập nhật hồ sơ thành công</string>
     <string name="error_no_internet">Không có kết nối Internet. Vui lòng thử lại.</string>
+    <string name="error_offline_question_detail">Đang ngoại tuyến, không xem được chi tiết câu hỏi này.</string>
+    <string name="message_question_saved_offline">Đã lưu câu hỏi. Hệ thống sẽ tự đăng khi có mạng trở lại trong 24 giờ.</string>
+    <string name="message_message_saved_offline">Đã lưu tin nhắn. Hệ thống sẽ tự gửi khi có mạng trở lại trong 24 giờ.</string>
+    <string name="label_message_pending">Đang chờ gửi</string>
     <string name="error_password_mismatch">Mật khẩu nhập lại không khớp</string>
     <string name="action_profile">Hồ sơ</string>
     <string name="title_profile">Hồ sơ cá nhân</string>
